@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity ShaderGraph - Pulse Effect | Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        h1 {
+            color: #4a5568;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .question {
+            background: rgba(70, 130, 240, 0.1);
+            border-left: 4px solid #4682f0;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .mandatory {
+            background: #ff6b6b;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .shader-description {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .properties {
+            background: rgba(52, 152, 219, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .properties ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .properties li {
+            margin: 8px 0;
+            font-weight: 500;
+        }
+        .note {
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Unity ShaderGraph - Pulse Effect</h1>
+        
+        <div class="question">
+            <h2>1. Pulse <span class="mandatory">mandatory</span></h2>
+            
+            <div class="shader-description">
+                <p>Based on the previous shader, create a new shader where the glow pulses / fades in and out.</p>
+                
+                <p>You must be able to change the following properties of the shader in the inspector window:</p>
+                
+                <div class="properties">
+                    <ul>
+                        <li><strong>Base color</strong></li>
+                        <li><strong>Glow color</strong></li>
+                        <li><strong>Minimum glow strength</strong></li>
+                        <li><strong>Maximum glow strength</strong></li>
+                        <li><strong>Pulse frequency</strong></li>
+                    </ul>
+                </div>
+                
+                <div class="note">
+                    <p>You are not limited to having only these properties, you may have as many properties and nodes as you need to achieve the effect.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="question">
+            <h3>Shader Requirements</h3>
+            <p>The pulse effect should smoothly animate between the minimum and maximum glow strength values over time. The frequency property should control how fast the pulsing occurs.</p>
+        </div>
+        
+        <div class="question">
+            <h3>Implementation Notes</h3>
+            <p>Consider using Unity's Time node to create the pulsing animation. You may need to use mathematical operations like sine waves to create a smooth pulsing effect.</p>
+        </div>
+        
+        <div class="question">
+            <h3>Repository Information</h3>
+            <p><strong>GitHub repository:</strong> alu-unity</p>
+            <p><strong>Directory:</strong> unity-shadergraph</p>
+            <p><strong>File:</strong> glow_animated.shadergraph, glow_animated.mat</p>
+        </div>
+    </div>
+</body>
+</html>
+</script>
+</body>
+</html>

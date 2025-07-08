@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Kana Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            color: white;
+            overflow: hidden;
+        }
+        
+        .status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 999;
+            color: white;
+        }
+        
+        .instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+        }
+        
+        .instruction-item {
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status">
+        Status: Extension loading...
+    </div>
+    
+    <div class="instructions">
+        <h3>🧠 Kana Positioning Test</h3>
+        <div class="instruction-item">1. Find the Kana orb (should be visible)</div>
+        <div class="instruction-item">2. Click the orb to open chat</div>
+        <div class="instruction-item">3. Chat panel should appear directly under the orb</div>
+        <div class="instruction-item">4. Check browser console for debug info</div>
+    </div>
+    
+    <script>
+        let statusElement = document.getElementById('status');
+        let checkCount = 0;
+        
+        function checkKanaStatus() {
+            checkCount++;
+            const orb = document.querySelector('.kana-orb');
+            const panel = document.querySelector('.kana-chat-panel');
+            
+            if (orb && panel) {
+                const orbRect = orb.getBoundingClientRect();
+                const panelRect = panel.getBoundingClientRect();
+                const isVisible = panel.classList.contains('visible');
+                
+                statusElement.innerHTML = `
+                    Kana found!<br>
+                    Orb: ${Math.round(orbRect.left)}, ${Math.round(orbRect.top)}<br>
+                    Panel: ${Math.round(panelRect.left)}, ${Math.round(panelRect.top)}<br>
+                    Panel visible: ${isVisible}<br>
+                    Checks: ${checkCount}
+                `;
+                
+                if (!isVisible) {
+                    statusElement.innerHTML += '<br><strong>Click orb to test positioning!</strong>';
+                }
+            } else {
+                statusElement.innerHTML = `
+                    Searching for Kana...<br>
+                    Orb found: ${!!orb}<br>
+                    Panel found: ${!!panel}<br>
+                    Checks: ${checkCount}
+                `;
+            }
+        }
+        
+        // Check status every 500ms
+        setInterval(checkKanaStatus, 500);
+        
+        // Initial check
+        setTimeout(checkKanaStatus, 100);
+        
+        // Log clicks for debugging
+        document.addEventListener('click', (e) => {
+            console.log('Click detected on:', e.target);
+            setTimeout(() => {
+                checkKanaStatus();
+            }, 100);
+        });
+    </script>
+</body>
+</html>

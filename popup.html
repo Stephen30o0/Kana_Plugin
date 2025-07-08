@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana AI Learning Assistant</title>
+    <style>
+        body {
+            width: 350px;
+            height: 500px;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+        
+        .popup-container {
+            padding: 20px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .status-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .status-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .status-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            margin-left: 8px;
+        }
+        
+        .status-indicator.inactive {
+            background: #FF5722;
+        }
+        
+        .quick-actions {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .action-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .action-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+        
+        .action-button:active {
+            transform: translateY(0);
+        }
+        
+        .action-icon {
+            font-size: 16px;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .footer-text {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .footer-link {
+            color: #90caf9;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .footer-link:hover {
+            text-decoration: underline;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .toggle-switch.active {
+            background: #4CAF50;
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        
+        .toggle-switch.active::after {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body>
+    <div class="popup-container">
+        <div class="header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px;">
+                    <path d="M12 2a3 3 0 0 0-3 3 3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0 3-3V8a3 3 0 0 0-3-3 3 3 0 0 0-3-3z"/>
+                    <path d="M12 12a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                    <path d="M9 18h6"/>
+                    <path d="M10 22h4"/>
+                </svg>
+            </div>
+            <div class="title">Kana</div>
+            <div class="subtitle">AI Learning Assistant</div>
+        </div>
+        
+        <div class="status-section">
+            <div class="status-item">
+                <span class="status-label">Status</span>
+                <div style="display: flex; align-items: center;">
+                    <span class="status-value" id="status-text">Active</span>
+                    <div class="status-indicator" id="status-indicator"></div>
+                </div>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Voice Commands</span>
+                <div class="toggle-switch active" id="voice-toggle"></div>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Platform</span>
+                <span class="status-value" id="platform-text">Canvas</span>
+            </div>
+        </div>
+        
+        <div class="quick-actions">
+            <button class="action-button" id="toggle-kana">
+                <span class="action-icon">⚡</span>
+                <span>Toggle Kana</span>
+            </button>
+            
+            <button class="action-button" id="reset-position">
+                <span class="action-icon">📍</span>
+                <span>Reset Position</span>
+            </button>
+            
+            <button class="action-button" id="open-settings">
+                <span class="action-icon">⚙️</span>
+                <span>Settings</span>
+            </button>
+            
+            <button class="action-button" id="view-stats">
+                <span class="action-icon">📊</span>
+                <span>Usage Stats</span>
+            </button>
+        </div>
+        
+        <div class="footer">
+            <div class="footer-text">
+                Say <strong>"Hey Kana"</strong> to get started<br>
+                <a href="#" class="footer-link" id="help-link">Learn More</a>
+            </div>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana Extension Test - Positioning</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            margin-top: 100px;
+        }
+        
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #ffd700;
+            border-bottom: 2px solid #ffd700;
+            padding-bottom: 10px;
+        }
+        
+        .instruction {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #ffd700;
+        }
+        
+        .note {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>🧠 Kana Extension Test</h1>
+        
+        <div class="test-section">
+            <h2>Panel Positioning Test</h2>
+            <div class="instruction">
+                <strong>Test 1:</strong> Click on the Kana orb (should appear as a floating brain emoji). 
+                The chat panel should appear directly under the orb, centered horizontally.
+            </div>
+            <div class="note">
+                Expected: Panel appears centered under the orb, never goes off-screen
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Drag and Position Test</h2>
+            <div class="instruction">
+                <strong>Test 2:</strong> Drag the orb to different positions on the screen (corners, edges, center). 
+                After each drag, click the orb to open the chat panel.
+            </div>
+            <div class="note">
+                Expected: Panel always appears under the orb, repositions when orb is moved
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Responsive Test</h2>
+            <div class="instruction">
+                <strong>Test 3:</strong> Open the chat panel, then resize the browser window. 
+                The panel should reposition to stay on-screen.
+            </div>
+            <div class="note">
+                Expected: Panel repositions automatically when window is resized
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Edge Cases</h2>
+            <div class="instruction">
+                <strong>Test 4:</strong> 
+                <ul>
+                    <li>Move orb to very bottom of screen - panel should appear above orb</li>
+                    <li>Move orb to left/right edges - panel should stay within viewport</li>
+                    <li>Scroll the page with panel open - panel should reposition</li>
+                </ul>
+            </div>
+            <div class="note">
+                Expected: Panel always stays within viewport bounds and visually anchored to orb
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Visual Anchoring</h2>
+            <div class="instruction">
+                <strong>Test 5:</strong> The panel should always appear to be "attached" to the orb, 
+                with consistent spacing regardless of orb position.
+            </div>
+            <div class="note">
+                Expected: Panel appears directly under orb with 10px gap, or above orb if no space below
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Add some dynamic content to test against
+        setInterval(() => {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log('Page active at:', timestamp);
+        }, 5000);
+    </script>
+</body>
+</html>

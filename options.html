@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana AI Learning Assistant - Settings</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: white;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .logo {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .title {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        .settings-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.95);
+        }
+        
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .setting-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .setting-info {
+            flex: 1;
+        }
+        
+        .setting-label {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        
+        .setting-description {
+            font-size: 14px;
+            opacity: 0.8;
+            line-height: 1.4;
+        }
+        
+        .setting-control {
+            flex-shrink: 0;
+            margin-left: 20px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .toggle-switch.active {
+            background: #4CAF50;
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        
+        .toggle-switch.active::after {
+            transform: translateX(26px);
+        }
+        
+        .select-control {
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+        }
+        
+        .select-control option {
+            background: #2d3748;
+            color: white;
+        }
+        
+        .range-control {
+            width: 120px;
+            margin-right: 10px;
+        }
+        
+        .range-value {
+            min-width: 50px;
+            text-align: center;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .info-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .info-box h4 {
+            margin: 0 0 10px 0;
+            color: #90caf9;
+        }
+        
+        .info-box p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        
+        .keyboard-shortcut {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-family: monospace;
+            margin-left: 10px;
+        }
+        
+        #glass-preview {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px;">
+                    <path d="M12 2a3 3 0 0 0-3 3 3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0 3-3V8a3 3 0 0 0-3-3 3 3 0 0 0-3-3z"/>
+                    <path d="M12 12a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                    <path d="M9 18h6"/>
+                    <path d="M10 22h4"/>
+                </svg>
+            </div>
+            <div class="title">Kana Settings</div>
+            <div class="subtitle">Customize your AI learning assistant</div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">General Settings</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Enable Kana</div>
+                    <div class="setting-description">Turn Kana on or off across all LMS platforms</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="enable-kana"></div>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Voice Commands</div>
+                    <div class="setting-description">Enable voice activation with "Hey Kana"</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="voice-commands"></div>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Auto-position</div>
+                    <div class="setting-description">Automatically position response panels to avoid covering content</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="auto-position"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">Appearance</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Orb Theme</div>
+                    <div class="setting-description">Choose the visual style of the Kana orb</div>
+                </div>
+                <div class="setting-control">
+                    <select class="select-control" id="orb-theme">
+                        <option value="gradient">Gradient (Default)</option>
+                        <option value="solid">Solid Color</option>
+                        <option value="neon">Neon Glow</option>
+                        <option value="minimal">Minimal</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Orb Size</div>
+                    <div class="setting-description">Adjust the size of the floating orb</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="orb-size" min="40" max="80" value="60">
+                    <span class="range-value" id="orb-size-value">60px</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Panel Transparency</div>
+                    <div class="setting-description">Control the transparency of response panels</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="panel-transparency" min="0" max="100" value="95">
+                    <span class="range-value" id="panel-transparency-value">95%</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">Glass Customization</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Panel Glass Color</div>
+                    <div class="setting-description">Choose the color theme for the glass panel</div>
+                </div>
+                <div class="setting-control">
+                    <select class="select-control" id="glass-color">
+                        <option value="blue">Blue (Default)</option>
+                        <option value="green">Green</option>
+                        <option value="purple">Purple</option>
+                        <option value="yellow">Yellow</option>
+                        <option value="red">Red</option>
+                        <option value="teal">Teal</option>
+                        <option value="orange">Orange</option>
+                        <option value="pink">Pink</option>
+                        <option value="clear">Clear</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Orb Glass Color</div>
+                    <div class="setting-description">Choose the color theme for the orb</div>
+                </div>
+                <div class="setting-control">
+                    <select class="select-control" id="orb-glass-color">
+                        <option value="blue">Blue (Default)</option>
+                        <option value="green">Green</option>
+                        <option value="purple">Purple</option>
+                        <option value="yellow">Yellow</option>
+                        <option value="red">Red</option>
+                        <option value="teal">Teal</option>
+                        <option value="orange">Orange</option>
+                        <option value="pink">Pink</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Glass Opacity</div>
+                    <div class="setting-description">Control the transparency of the glass effect</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="glass-opacity" min="10" max="100" value="80">
+                    <span class="range-value" id="glass-opacity-value">80%</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Glass Blur</div>
+                    <div class="setting-description">Adjust the blur intensity of the glass effect</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="glass-blur" min="10" max="50" value="30">
+                    <span class="range-value" id="glass-blur-value">30px</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Glass Saturation</div>
+                    <div class="setting-description">Enhance or reduce color saturation</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="glass-saturation" min="50" max="200" value="140">
+                    <span class="range-value" id="glass-saturation-value">140%</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Glass Brightness</div>
+                    <div class="setting-description">Adjust the brightness of the glass effect</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="glass-brightness" min="80" max="130" value="105">
+                    <span class="range-value" id="glass-brightness-value">105%</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">3D Glass Depth</div>
+                    <div class="setting-description">Control the depth and shadow intensity</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="glass-depth" min="20" max="100" value="60">
+                    <span class="range-value" id="glass-depth-value">60%</span>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h4>Glass Preview</h4>
+                <div id="glass-preview" style="
+                    height: 80px;
+                    background: linear-gradient(135deg, rgba(240, 248, 255, 0.3) 0%, rgba(220, 240, 255, 0.25) 50%, rgba(200, 230, 255, 0.3) 100%);
+                    backdrop-filter: blur(30px) brightness(1.05) saturate(1.4);
+                    border: 1px solid rgba(255, 255, 255, 0.4);
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: rgba(20, 40, 80, 0.9);
+                    font-weight: 500;
+                    margin-top: 10px;
+                ">Glass Preview</div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">Behavior</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Response Auto-hide</div>
+                    <div class="setting-description">Automatically hide response panels after a delay</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="auto-hide"></div>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Auto-hide Delay</div>
+                    <div class="setting-description">Time in seconds before panels auto-hide</div>
+                </div>
+                <div class="setting-control">
+                    <input type="range" class="range-control" id="auto-hide-delay" min="5" max="60" value="30">
+                    <span class="range-value" id="auto-hide-delay-value">30s</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Wake Word Sensitivity</div>
+                    <div class="setting-description">How sensitive voice detection is to "Hey Kana"</div>
+                </div>
+                <div class="setting-control">
+                    <select class="select-control" id="wake-sensitivity">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">Privacy & Data</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Usage Analytics</div>
+                    <div class="setting-description">Allow anonymous usage data collection to improve Kana</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="analytics"></div>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Content Analysis</div>
+                    <div class="setting-description">Allow Kana to analyze page content for better responses</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="content-analysis"></div>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h4>Privacy Notice</h4>
+                <p>Kana processes content locally in your browser when possible. No personal information or assignment content is stored on external servers unless you explicitly enable cloud features.</p>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">Keyboard Shortcuts</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Toggle Kana</div>
+                    <div class="setting-description">Show/hide the Kana orb</div>
+                </div>
+                <div class="setting-control">
+                    <span class="keyboard-shortcut">Ctrl+Shift+K</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Open Chat</div>
+                    <div class="setting-description">Open the chat panel</div>
+                </div>
+                <div class="setting-control">
+                    <span class="keyboard-shortcut">Ctrl+Shift+C</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Reset Position</div>
+                    <div class="setting-description">Reset orb to default position</div>
+                </div>
+                <div class="setting-control">
+                    <span class="keyboard-shortcut">Ctrl+Shift+R</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn btn-primary" id="save-settings">Save Settings</button>
+            <button class="btn btn-secondary" id="reset-settings">Reset to Defaults</button>
+        </div>
+    </div>
+    
+    <script src="options.js"></script>
+</body>
+</html>

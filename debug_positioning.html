@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana Positioning Debug</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b 0%, #4ecdc4 50%, #45b7d1 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .debug-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        
+        .content {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+            padding: 50px 20px;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .instructions {
+            font-size: 1.2em;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .test-button {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-info" id="debugInfo">
+        Debug Info:<br>
+        Orb Position: <span id="orbPos">Loading...</span><br>
+        Panel Position: <span id="panelPos">N/A</span><br>
+        Viewport: <span id="viewport">Loading...</span>
+    </div>
+    
+    <div class="content">
+        <h1>🧠 Kana Position Debug</h1>
+        
+        <div class="instructions">
+            <strong>Debug Steps:</strong><br>
+            1. Look for the Kana orb (🧠) - it should appear somewhere on the screen<br>
+            2. Click the orb to open the chat panel<br>
+            3. The panel should appear directly under the orb<br>
+            4. Check the debug info in the top-left corner<br>
+            5. Try dragging the orb to different positions and test again
+        </div>
+        
+        <button class="test-button" onclick="logDebugInfo()">📊 Log Debug Info</button>
+        <button class="test-button" onclick="testPanelPosition()">🎯 Test Panel Position</button>
+    </div>
+    
+    <script>
+        function updateDebugInfo() {
+            const orbElement = document.querySelector('.kana-orb');
+            const panelElement = document.querySelector('.kana-chat-panel');
+            const viewport = `${window.innerWidth}x${window.innerHeight}`;
+            
+            document.getElementById('viewport').textContent = viewport;
+            
+            if (orbElement) {
+                const rect = orbElement.getBoundingClientRect();
+                document.getElementById('orbPos').textContent = 
+                    `${Math.round(rect.left)}, ${Math.round(rect.top)} (${Math.round(rect.width)}x${Math.round(rect.height)})`;
+            } else {
+                document.getElementById('orbPos').textContent = 'Not found';
+            }
+            
+            if (panelElement && panelElement.classList.contains('visible')) {
+                const rect = panelElement.getBoundingClientRect();
+                document.getElementById('panelPos').textContent = 
+                    `${Math.round(rect.left)}, ${Math.round(rect.top)} (${Math.round(rect.width)}x${Math.round(rect.height)})`;
+            } else {
+                document.getElementById('panelPos').textContent = 'Hidden';
+            }
+        }
+        
+        function logDebugInfo() {
+            console.log('=== KANA DEBUG INFO ===');
+            console.log('Viewport:', window.innerWidth, 'x', window.innerHeight);
+            
+            const orbElement = document.querySelector('.kana-orb');
+            if (orbElement) {
+                console.log('Orb element found:', orbElement);
+                console.log('Orb rect:', orbElement.getBoundingClientRect());
+            } else {
+                console.log('Orb element not found');
+            }
+            
+            const panelElement = document.querySelector('.kana-chat-panel');
+            if (panelElement) {
+                console.log('Panel element found:', panelElement);
+                console.log('Panel rect:', panelElement.getBoundingClientRect());
+                console.log('Panel visible:', panelElement.classList.contains('visible'));
+            } else {
+                console.log('Panel element not found');
+            }
+        }
+        
+        function testPanelPosition() {
+            const orbElement = document.querySelector('.kana-orb');
+            if (orbElement) {
+                console.log('Clicking orb to test panel position...');
+                orbElement.click();
+                setTimeout(() => {
+                    updateDebugInfo();
+                    logDebugInfo();
+                }, 500);
+            } else {
+                console.log('Orb not found - cannot test panel position');
+            }
+        }
+        
+        // Update debug info every second
+        setInterval(updateDebugInfo, 1000);
+        
+        // Initial update
+        setTimeout(updateDebugInfo, 1000);
+    </script>
+</body>
+</html>

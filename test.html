@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kana AI Viewport Test - Unity ShaderGraph</title>
+    <style>
+        body {
+            background-color: #2c3e50;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .content {
+            background-color: #34495e;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            min-height: 400px;
+        }
+        .question {
+            background-color: #e74c3c;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            min-height: 150px;
+        }
+        .assignment {
+            background-color: #27ae60;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            min-height: 200px;
+        }
+        code {
+            background-color: #1e1e1e;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            display: block;
+            margin: 10px 0;
+        }
+        h1, h2, h3 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .spacer {
+            height: 100vh;
+            background: linear-gradient(45deg, #2c3e50, #34495e);
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h1>Unity ShaderGraph Fundamentals</h1>
+    
+    <div class="content">
+        <h2>Learning Objectives</h2>
+        <p>By the end of this project, you will understand:</p>
+        <ul>
+            <li>How to create basic shaders in Unity</li>
+            <li>What is a base color and how to use it</li>
+            <li>How to apply textures to materials</li>
+            <li>Basic shader node connections</li>
+        </ul>
+    </div>
+    
+    <!-- Spacer to create scrolling -->
+    <div class="spacer">Scroll down to see more content ↓</div>
+    
+    <div class="content">
+        <h2>Introduction to Shaders</h2>
+        <p>Shaders are programs that run on the GPU to determine how surfaces should be rendered...</p>
+    </div>
+    
+    <div class="question">
+        <h3>Question 1</h3>
+        <p><strong>What is the difference between a vertex shader and a fragment shader?</strong></p>
+        <p>Vertex shaders process individual vertices, while fragment shaders process individual pixels. Consider how each type affects the rendering pipeline.</p>
+    </div>
+    
+    <!-- Another spacer -->
+    <div class="spacer">Keep scrolling to Question 2 ↓</div>
+    
+    <div class="content">
+        <h2>Base Color in ShaderGraph</h2>
+        <p>The base color is the fundamental color of your material. It's like the "main" color that gets modified by lighting, textures, and other effects.</p>
+        <p>In ShaderGraph, you can set the base color using the <code>Base Color</code> property node.</p>
+        
+        <code>
+// Example: Setting base color in a shader
+_BaseColor ("Base Color", Color) = (1,1,1,1)
+        </code>
+    </div>
+    
+    <div class="question">
+        <h3>Question 2</h3>
+        <p><strong>What is the purpose of a base color in a shader, and how does it interact with lighting?</strong></p>
+        <p>Think about how the base color serves as the starting point for all lighting calculations. Consider what happens when light hits a colored surface.</p>
+    </div>
+    
+    <!-- Another spacer -->
+    <div class="spacer">Continue to Question 3 ↓</div>
+    
+    <div class="assignment">
+        <h3>Assignment 1</h3>
+        <p><strong>Create a New Material</strong></p>
+        <p>Create a new material with a red base color and apply it to a cube in your scene.</p>
+        <p><strong>Requirements:</strong></p>
+        <ul>
+            <li>Use ShaderGraph to create the material</li>
+            <li>Set the base color to pure red (1, 0, 0)</li>
+            <li>Test the material on a cube primitive</li>
+        </ul>
+        <p><strong>Due:</strong> Next week</p>
+    </div>
+    
+    <div class="question">
+        <h3>Question 3</h3>
+        <p><strong>How would you modify a base color using a texture in ShaderGraph?</strong></p>
+        <p>Consider the different ways you can combine a base color with a texture. Think about multiplication, addition, and other blending modes.</p>
+    </div>
+    
+    <!-- Final spacer -->
+    <div class="spacer">Final section ↓</div>
+    
+    <div class="content">
+        <h2>Advanced Shader Techniques</h2>
+        <p>Once you understand base colors, you can explore more advanced techniques...</p>
+        
+        <code>
+// Advanced: Combining base color with texture
+fixed4 frag (v2f i) : SV_Target
+{
+    fixed4 texColor = tex2D(_MainTex, i.uv);
+    fixed4 finalColor = texColor * _BaseColor;
+    return finalColor;
+}
+        </code>
+    </div>
+    
+    <div class="question">
+        <h3>Question 4</h3>
+        <p><strong>What happens when you multiply a texture color by a base color?</strong></p>
+        <p>Think about the mathematical operation and its visual result. Consider what happens to white, black, and colored pixels.</p>
+    </div>
+
+    <script>
+        // Add some JavaScript to highlight the current viewport functionality
+        console.log('Test page loaded. Try asking Kana about specific questions while scrolled to different sections!');
+        
+        // Example test commands you can try:
+        console.log('Example questions to test:');
+        console.log('1. "help with question 2" (when scrolled to Question 2)');
+        console.log('2. "what is base color" (when in the base color section)');
+        console.log('3. "explain this code" (when viewing a code block)');
+        console.log('4. "help with current question" (for viewport-specific help)');
+    </script>
+</body>
+</html>

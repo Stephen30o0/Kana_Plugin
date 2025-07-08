@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana Extension Quick Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 30px;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .content {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .test-item {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007acc;
+        }
+        .code-test {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+        }
+        .status {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+        }
+        .instruction {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #faebd7;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>🧠 Kana Extension Test Page</h1>
+        
+        <div class="status">
+            <h3>✅ Extension Status Check</h3>
+            <p><strong>Expected:</strong> Kana orb should appear in bottom-right corner</p>
+            <p><strong>Test:</strong> Click the orb or say "Hey Kana" to test functionality</p>
+        </div>
+        
+        <div class="instruction">
+            <h3>🔧 How to Test</h3>
+            <ol>
+                <li><strong>Visual Test:</strong> Look for the glassmorphic orb in the corner</li>
+                <li><strong>Click Test:</strong> Click the orb to open chat interface</li>
+                <li><strong>Voice Test:</strong> Say "Hey Kana" to test voice recognition</li>
+                <li><strong>Content Test:</strong> Ask questions about the content below</li>
+                <li><strong>Console Test:</strong> Check F12 console for any errors</li>
+            </ol>
+        </div>
+        
+        <div class="test-item">
+            <h3>Test Question 1</h3>
+            <p>What is the difference between synchronous and asynchronous programming in JavaScript?</p>
+        </div>
+        
+        <div class="code-test">
+            <h4>JavaScript Example:</h4>
+            <pre><code class="language-javascript">
+// Synchronous function
+function synchronousFunction() {
+    console.log("This runs first");
+    console.log("This runs second");
+    console.log("This runs third");
+}
+
+// Asynchronous function
+async function asynchronousFunction() {
+    console.log("This runs first");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log("This runs after 1 second");
+}
+            </code></pre>
+        </div>
+        
+        <div class="test-item">
+            <h3>Test Question 2</h3>
+            <p>How do you handle errors in asynchronous JavaScript code?</p>
+        </div>
+        
+        <div class="code-test">
+            <h4>Python Example:</h4>
+            <pre><code class="language-python">
+import asyncio
+
+async def fetch_data():
+    try:
+        # Simulate API call
+        await asyncio.sleep(1)
+        return {"status": "success", "data": "Hello World"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# Run the async function
+async def main():
+    result = await fetch_data()
+    print(result)
+
+asyncio.run(main())
+            </code></pre>
+        </div>
+        
+        <div class="test-item">
+            <h3>Test Question 3</h3>
+            <p>What are the advantages of using async/await over traditional callbacks?</p>
+        </div>
+        
+        <div class="status">
+            <h3>✅ Expected Kana Behavior</h3>
+            <ul>
+                <li><strong>Content Analysis:</strong> Kana should detect the 3 questions above</li>
+                <li><strong>Code Recognition:</strong> Should identify JavaScript and Python code blocks</li>
+                <li><strong>Relevance Matching:</strong> Should find content related to your questions</li>
+                <li><strong>Educational Response:</strong> Should provide guidance, not direct answers</li>
+                <li><strong>No Console Errors:</strong> F12 console should be clean</li>
+            </ul>
+        </div>
+        
+        <div class="instruction">
+            <h3>🎨 Glass Theme Testing</h3>
+            <p><strong>Options Page:</strong> Right-click the extension icon → "Options"</p>
+            <p><strong>Theme Testing:</strong> Try different glass themes (Crystal, Ocean, Sunset, etc.)</p>
+            <p><strong>Live Preview:</strong> Changes should be visible immediately</p>
+            <p><strong>Customization:</strong> Adjust transparency, blur, and colors</p>
+        </div>
+        
+        <h2>Sample Learning Content</h2>
+        <p>This page contains various elements for Kana to analyze: questions, code blocks in different languages, and learning-focused content. The extension should be able to understand the context and provide helpful educational guidance when you interact with it.</p>
+        
+        <p><strong>Quick Test Commands:</strong></p>
+        <ul>
+            <li>"Hey Kana, explain the first question"</li>
+            <li>"Hey Kana, help me understand this JavaScript code"</li>
+            <li>"Hey Kana, what's the difference between these code examples?"</li>
+        </ul>
+    </div>
+</body>
+</html>
