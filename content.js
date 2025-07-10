@@ -2432,7 +2432,8 @@ GUIDELINES FOR RESPONSE:
 - Help them understand the concepts without giving direct answers
 - Ask follow-up questions to guide their thinking
 - Use encouraging, supportive language
-- Format with HTML headings (h3), paragraphs (p), and lists (ul/li)
+- Respond in a natural, conversational way that adapts to the content type
+- Use appropriate HTML formatting (headings, paragraphs, lists) based on your response content
 - ALWAYS include helpful resources: SPECIFIC tutorials and guides that directly address the exact topic/problem
 - For Unity VR questions: provide Unity VR tutorials, XR Interaction Toolkit guides, specific VR mechanics tutorials
 - For coding questions: provide tutorials about the specific programming concept, not general programming courses
@@ -2447,11 +2448,12 @@ RESOURCE GUIDELINES:
 - If asking about physics problems → physics tutorials about that specific topic
 - Make resources as specific and directly relevant as possible
 
-RESPONSE FORMAT:
-1. Greeting and context acknowledgment
-2. Learning guidance specific to their question using Markdown formatting
-3. Key concepts breakdown
-4. Helpful resources section with real links formatted as: [Title](URL)
+RESPONSE APPROACH:
+Respond naturally and conversationally, adapting your format to best serve the specific question:
+- For complex problems: break down into steps naturally
+- For conceptual questions: explain with examples and analogies
+- For practical tasks: provide guided approach with checkpoints
+- Always include real, working educational resources formatted as: [Title](URL)
    
 Examples of good resource formatting:
 - [Khan Academy Linear Algebra](https://www.khanacademy.org/math/linear-algebra)
@@ -2523,7 +2525,7 @@ Focus your response on the Current Question/Section they are viewing and provide
         cleanedResponse = cleanedResponse.replace(/^```\s*/g, '').replace(/\s*```$/g, '');
       }
       
-      // Check if the response is in JSON format
+      // Check if the response is in JSON format (legacy support)
       if (cleanedResponse.startsWith('{')) {
         try {
           const jsonResponse = JSON.parse(cleanedResponse);
@@ -2531,18 +2533,18 @@ Focus your response on the Current Question/Section they are viewing and provide
             type: 'learning_guidance',
             title: jsonResponse.title || this.generateResponseTitle(questionContext),
             content: jsonResponse.content || "I'm here to help guide your learning process.",
-            hints: jsonResponse.hints || ["Break down the problem into smaller parts"],
+            hints: jsonResponse.hints || [],
             resources: jsonResponse.resources || [],
-            concepts: jsonResponse.concepts || ["Critical Thinking"],
-            nextSteps: jsonResponse.nextSteps || ["Review your course materials"]
+            concepts: jsonResponse.concepts || [],
+            nextSteps: jsonResponse.nextSteps || []
           };
         } catch (jsonError) {
           console.warn("Failed to parse JSON response:", jsonError);
-          // Continue to text parsing approach
+          // Continue to markdown parsing approach
         }
       }
       
-      // For HTML/text responses, create a structured response
+      // For natural markdown/text responses, parse as flexible content
       let processedContent = cleanedResponse;
       
       // Convert Markdown to HTML if it's not already HTML
@@ -2868,14 +2870,17 @@ Focus your response on the Current Question/Section they are viewing and provide
         </div>
       `;
     } else if (response.type === 'educational' || response.type === 'learning_guidance') {
+      // For flexible, natural responses - just render the content as-is
       let html = `
         <div class="kana-response">
           <h3>${response.title}</h3>
           <div class="kana-response-main">
             ${response.content}
           </div>
+        </div>
       `;
       
+      // Only add structured sections if they actually exist and have content
       if (response.hints && response.hints.length > 0) {
         html += `
           <div class="kana-hints">
