@@ -3,6 +3,71 @@
 
 console.log('Kana AI Learning Assistant - Content Script Loading...');
 
+// Conversation context manager for follow-up questions
+class ConversationContext {
+  constructor() {
+    this.previousQuestions = [];
+    this.lastResponse = null;
+    this.currentTopic = null;
+    this.pageContext = null;
+    this.maxHistoryLength = 5; // Keep last 5 questions for context
+  }
+  
+  addQuestion(question) {
+    this.previousQuestions.push(question);
+    if (this.previousQuestions.length > this.maxHistoryLength) {
+      this.previousQuestions.shift(); // Remove oldest question
+    }
+    
+    // Try to detect if this continues the current topic
+    if (this.currentTopic) {
+      const questionLower = question.toLowerCase();
+      const topicLower = this.currentTopic.toLowerCase();
+      
+      // Simple topic continuity check
+      if (questionLower.includes('this') || questionLower.includes('that') || 
+          questionLower.includes('it') || questionLower.includes('here') ||
+          questionLower.includes(topicLower)) {
+        // Question seems to continue the current topic
+      } else {
+        // Seems like a new topic
+        this.currentTopic = this.extractTopicFromQuestion(question);
+      }
+    } else {
+      this.currentTopic = this.extractTopicFromQuestion(question);
+    }
+  }
+  
+  addResponse(response) {
+    this.lastResponse = typeof response === 'string' ? response : response.content || '';
+  }
+  
+  extractTopicFromQuestion(question) {
+    // Simple topic extraction - get key nouns/concepts
+    const words = question.toLowerCase().split(/\s+/);
+    const stopWords = ['what', 'how', 'why', 'when', 'where', 'who', 'is', 'are', 'can', 'do', 'does', 'will', 'should', 'a', 'an', 'the', 'this', 'that', 'i', 'me', 'my'];
+    const meaningfulWords = words.filter(word => !stopWords.includes(word) && word.length > 2);
+    
+    return meaningfulWords.slice(0, 3).join(' '); // Take first few meaningful words as topic
+  }
+  
+  getContext() {
+    return {
+      previousQuestions: this.previousQuestions,
+      lastResponse: this.lastResponse,
+      currentTopic: this.currentTopic,
+      pageContext: this.pageContext
+    };
+  }
+  
+  clear() {
+    this.previousQuestions = [];
+    this.lastResponse = null;
+    this.currentTopic = null;
+    this.pageContext = null;
+  }
+}
+
 class KanaAssistant {
   constructor() {
     console.log('Kana Assistant initializing...');
@@ -14,6 +79,9 @@ class KanaAssistant {
     this.recognition = null;
     this.position = { x: 30, y: 50 }; // percentage from right and top
     this.wakePhrases = ['hey kana', 'hi kana', 'hello kana'];
+    
+    // Conversation context for follow-up questions
+    this.conversationContext = new ConversationContext();
     
     // Glass theme definitions
     this.glassThemes = {
@@ -694,6 +762,9 @@ class KanaAssistant {
       // Show the response in the UI
       this.showResponse(educationalResponse);
       
+      // Store the question in conversation context
+      this.conversationContext.addQuestion(userQuestion);
+      
       // Create context for AI processing with viewport priority
       const context = {
         platform: platform,
@@ -713,6 +784,10 @@ class KanaAssistant {
       console.log('Got AI response:', response);
       
       this.showResponse(response);
+      
+      // Store the response in conversation context
+      this.conversationContext.addResponse(response);
+      
       this.updateOrbState('idle');
       console.log('Response shown, orb state reset to idle');
       
@@ -1562,17 +1637,14 @@ class KanaAssistant {
     const { questionContext, pageContent, platform, userQuestion } = context;
     const GEMINI_API_KEY = "AIzaSyC1yj16iVGJodO5uWKa0sRYhU7ma9R0qKM";
     
-    // List of models to try in order of preference (newest first)
-    const MODELS_TO_TRY = [
-      "gemini-2.5-flash",
+    // Default to gemini-2.5-flash since API key is confirmed to work
+    const PRIMARY_MODEL = "gemini-2.5-flash";
+    const FALLBACK_MODELS = [
       "gemini-2.0-flash",
-      "gemini-1.5-flash-002",
+      "gemini-1.5-flash-002", 
       "gemini-1.5-flash",
       "gemini-1.5-pro-002",
-      "gemini-1.5-pro", 
-      "gemini-pro",
-      "gemini-1.0-pro-latest",
-      "gemini-1.0-pro"
+      "gemini-1.5-pro"
     ];
     
     try {
@@ -1594,15 +1666,8 @@ class KanaAssistant {
       let errorMessage = "";
       let modelUsed = null;
       
-      // First, try to get available models
-      const availableModels = await this.getAvailableGeminiModels(GEMINI_API_KEY);
-      console.log("Available Gemini models:", availableModels);
-      
-      // Filter our preferred models by what's actually available
-      const modelsToTest = availableModels.length > 0 ? 
-        MODELS_TO_TRY.filter(model => availableModels.includes(model)) : 
-        MODELS_TO_TRY;
-      
+      // Skip model availability check - use primary model directly
+      const modelsToTest = [PRIMARY_MODEL, ...FALLBACK_MODELS];
       console.log("Models to test:", modelsToTest);
       
       // Try each model until one works
@@ -1629,7 +1694,7 @@ class KanaAssistant {
                 temperature: 0.8,
                 topK: 40,
                 topP: 0.95,
-                maxOutputTokens: 1000,
+                maxOutputTokens: 2048,
                 candidateCount: 1
               },
               safetySettings: [
@@ -1688,7 +1753,7 @@ class KanaAssistant {
                     temperature: 0.8,
                     topK: 40,
                     topP: 0.95,
-                    maxOutputTokens: 1000,
+                    maxOutputTokens: 2048,
                     candidateCount: 1
                   },
                   safetySettings: [
@@ -2370,6 +2435,24 @@ Platform: ${platform}
 Page: ${pageContent.title || 'Learning content'}
 Student Question: "${userQuestion}"`;
 
+    // Add conversation context for follow-up questions
+    if (this.conversationContext.previousQuestions.length > 0) {
+      prompt += `
+
+CONVERSATION CONTEXT:
+Previous Questions: ${this.conversationContext.previousQuestions.slice(-2).join(', ')}`;
+      
+      if (this.conversationContext.currentTopic) {
+        prompt += `
+Current Topic: ${this.conversationContext.currentTopic}`;
+      }
+      
+      if (this.conversationContext.lastResponse) {
+        prompt += `
+Previous Response Summary: ${this.conversationContext.lastResponse.substring(0, 200)}...`;
+      }
+    }
+
     // Add current section information with enhanced detail
     if (prioritizedContent && prioritizedContent.currentSection) {
       const section = prioritizedContent.currentSection;
@@ -2424,46 +2507,24 @@ All Page Topics: ${pageContent.headings.slice(0, 5).join(', ')}`;
     prompt += `
 
 GUIDELINES FOR RESPONSE:
-- IMPORTANT: The student is asking about what they can currently see on their screen
-- If they ask "what question am I on?" respond with the Current Question number and brief description
-- If they ask "what should I do here?" or "give me insight on this", focus on the Current Question content
-- When they say "this" they mean the question/section currently visible on their screen
-- Provide educational guidance for the specific question they're viewing
+- CRITICAL: The student is asking about what they can currently see on their screen
+- Look at the "Current Section" and "Other Visible Sections" to understand exactly where they are
+- If this is a follow-up question, they're referring to the same screen location as before
+- When they say "this part" or "explain this" they mean the specific section visible on their screen
+- Focus your response on the EXACT content they're viewing, not generic information
+- If you see a current section like "System Security and Ethical Development", focus on that specific section
+- Provide educational guidance for the specific content they're viewing
 - Help them understand the concepts without giving direct answers
-- Ask follow-up questions to guide their thinking
 - Use encouraging, supportive language
-- Respond in a natural, conversational way that adapts to the content type
-- Use appropriate HTML formatting (headings, paragraphs, lists) based on your response content
-- ALWAYS include helpful resources: SPECIFIC tutorials and guides that directly address the exact topic/problem
-- For Unity VR questions: provide Unity VR tutorials, XR Interaction Toolkit guides, specific VR mechanics tutorials
-- For coding questions: provide tutorials about the specific programming concept, not general programming courses
-- For math/science: provide tutorials about the specific mathematical or scientific concept being asked about
-- Provide 2-4 highly relevant links that directly help with the current specific question or problem
-- Avoid generic educational platforms unless they have specific content for the exact topic
-
-RESOURCE GUIDELINES:
-- If asking about Unity VR object interaction → Unity VR interaction tutorials, XR Toolkit docs
-- If asking about specific algorithms → algorithm-specific tutorials and visualizations  
-- If asking about math concepts → tutorials specifically about that mathematical concept
-- If asking about physics problems → physics tutorials about that specific topic
-- Make resources as specific and directly relevant as possible
+- Respond naturally as a conversational AI - format your response however makes most sense
+- Include relevant educational resources formatted as working links: [Title](URL)
+- No need for rigid structure - respond naturally and helpfully
+- If they ask a follow-up, remember the previous conversation context
 
 RESPONSE APPROACH:
-Respond naturally and conversationally, adapting your format to best serve the specific question:
-- For complex problems: break down into steps naturally
-- For conceptual questions: explain with examples and analogies
-- For practical tasks: provide guided approach with checkpoints
-- Always include real, working educational resources formatted as: [Title](URL)
-   
-Examples of good resource formatting:
-- [Khan Academy Linear Algebra](https://www.khanacademy.org/math/linear-algebra)
-- [CS50 Introduction to Programming](https://www.youtube.com/watch?v=YoXxevp1WRQ)
-- [Unity Learn Platform](https://learn.unity.com/)
-- [MDN Web Development Docs](https://developer.mozilla.org/)
+Respond naturally as yourself - no forced formatting or sections. Just be helpful, contextual, and educational. Include working resource links where relevant using [Title](URL) format.
 
-IMPORTANT: Always include at least 2-3 real, working links to educational resources that directly relate to the student's question. Use the [Title](URL) format for all links.
-
-Focus your response on the Current Question/Section they are viewing and provide specific, contextual help with actionable resources.`;
+Focus entirely on what they're currently viewing on their screen and provide specific, helpful guidance for that exact content.`;
 
     return prompt;
   }
@@ -2533,10 +2594,10 @@ Focus your response on the Current Question/Section they are viewing and provide
             type: 'learning_guidance',
             title: jsonResponse.title || this.generateResponseTitle(questionContext),
             content: jsonResponse.content || "I'm here to help guide your learning process.",
-            hints: jsonResponse.hints || [],
-            resources: jsonResponse.resources || [],
-            concepts: jsonResponse.concepts || [],
-            nextSteps: jsonResponse.nextSteps || []
+            hints: [],
+            resources: [],
+            concepts: [],
+            nextSteps: []
           };
         } catch (jsonError) {
           console.warn("Failed to parse JSON response:", jsonError);
@@ -2544,22 +2605,23 @@ Focus your response on the Current Question/Section they are viewing and provide
         }
       }
       
-      // For natural markdown/text responses, parse as flexible content
+      // For natural markdown/text responses, parse as pure content
       let processedContent = cleanedResponse;
       
       // Convert Markdown to HTML if it's not already HTML
       if (!processedContent.includes('<') || processedContent.includes('**') || processedContent.includes('##')) {
         processedContent = this.convertMarkdownToHtml(processedContent);
       }
-      
+
+      // NO EXTRACTION - let AI handle everything
       return {
         type: 'learning_guidance',
         title: this.generateResponseTitle(questionContext),
         content: `<div class="kana-ai-response">${processedContent}</div>`,
-        hints: this.extractHintsFromResponse(cleanedResponse),
-        concepts: this.extractConceptsFromResponse(cleanedResponse, questionContext),
-        nextSteps: this.extractNextStepsFromResponse(cleanedResponse),
-        resources: this.extractResourcesFromResponse(cleanedResponse, questionContext)
+        hints: [],
+        concepts: [],
+        nextSteps: [],
+        resources: []
       };
     } catch (error) {
       console.error("Error parsing AI response:", error);
@@ -2567,10 +2629,10 @@ Focus your response on the Current Question/Section they are viewing and provide
         type: 'learning_guidance',
         title: "Learning Support",
         content: `<div class="kana-ai-response">${this.convertMarkdownToHtml(aiResponseText || "I'm here to help guide your learning process.")}</div>`,
-        hints: ["Break down the concept into smaller parts"],
-        concepts: ["Critical Thinking"],
-        nextSteps: ["Review your course materials"],
-        resources: this.getSubjectResources(null, aiResponseText || "").slice(0, 2)
+        hints: [],
+        concepts: [],
+        nextSteps: [],
+        resources: []
       };
     }
   }
@@ -2593,24 +2655,65 @@ Focus your response on the Current Question/Section they are viewing and provide
     
     // Convert inline code (`code` -> <code>code</code>)
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Convert links ([text](url) -> <a href="url">text</a>)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     
     // Convert unordered lists (- item or * item -> <ul><li>item</li></ul>)
-    html = html.replace(/^\s*[-\*\+]\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+    // Handle nested lists better
+    const lines = html.split('\n');
+    let inList = false;
+    let listType = null;
+    let processedLines = [];
     
-    // Convert numbered lists (1. item -> <ol><li>item</li></ol>)
-    html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/gs, function(match) {
-      // Only convert if it's not already in a <ul> tag
-      if (match.includes('<ul>')) {
-        return match;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Check for unordered list item
+      const unorderedMatch = trimmedLine.match(/^[-\*\+]\s+(.+)/);
+      // Check for ordered list item  
+      const orderedMatch = trimmedLine.match(/^\d+\.\s+(.+)/);
+      
+      if (unorderedMatch) {
+        if (!inList || listType !== 'ul') {
+          if (inList) processedLines.push(`</${listType}>`);
+          processedLines.push('<ul>');
+          listType = 'ul';
+          inList = true;
+        }
+        processedLines.push(`<li>${unorderedMatch[1]}</li>`);
+      } else if (orderedMatch) {
+        if (!inList || listType !== 'ol') {
+          if (inList) processedLines.push(`</${listType}>`);
+          processedLines.push('<ol>');
+          listType = 'ol';
+          inList = true;
+        }
+        processedLines.push(`<li>${orderedMatch[1]}</li>`);
+      } else {
+        if (inList && trimmedLine === '') {
+          // Empty line - might end list or continue
+          continue;
+        } else if (inList && trimmedLine !== '') {
+          // Non-list item while in list - end list
+          processedLines.push(`</${listType}>`);
+          inList = false;
+          listType = null;
+          processedLines.push(line);
+        } else {
+          // Normal line
+          processedLines.push(line);
+        }
       }
-      return '<ol>' + match + '</ol>';
-    });
+    }
     
-    // Fix multiple consecutive ul/ol tags
-    html = html.replace(/<\/ul>\s*<ul>/g, '');
-    html = html.replace(/<\/ol>\s*<ol>/g, '');
+    // Close any open list
+    if (inList) {
+      processedLines.push(`</${listType}>`);
+    }
+    
+    html = processedLines.join('\n');
     
     // Convert line breaks to proper paragraphs
     const paragraphs = html.split(/\n\s*\n/);
@@ -2619,12 +2722,7 @@ Focus your response on the Current Question/Section they are viewing and provide
       if (!p) return '';
       
       // Don't wrap if it's already a block element
-      if (p.match(/^<(h[1-6]|ul|ol|div|blockquote)/)) {
-        return p;
-      }
-      
-      // Don't wrap single list items
-      if (p.match(/^<li>/)) {
+      if (p.match(/^<(h[1-6]|ul|ol|div|blockquote|li)/)) {
         return p;
       }
       
@@ -2638,47 +2736,95 @@ Focus your response on the Current Question/Section they are viewing and provide
   }
   
   extractHintsFromResponse(response) {
-    // Extract hints from the response text
-    const hintKeywords = ['hint', 'try', 'consider', 'think about', 'remember', 'start by'];
-    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    // Only extract hints if they're actually useful - no generic extractions
+    const hintKeywords = ['try this', 'consider', 'think about', 'remember that', 'start by', 'tip:', 'suggestion:', 'approach this by'];
+    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 25);
     
-    const hints = sentences.filter(sentence => 
-      hintKeywords.some(keyword => sentence.toLowerCase().includes(keyword))
-    ).slice(0, 3);
+    const hints = sentences.filter(sentence => {
+      const lower = sentence.toLowerCase().trim();
+      return hintKeywords.some(keyword => lower.includes(keyword)) &&
+             !lower.includes('resource') &&
+             !lower.includes('link') &&
+             !lower.includes('http') &&
+             !lower.includes('additional') &&
+             lower.length > 30 &&
+             lower.length < 180;
+    }).slice(0, 2);
     
-    return hints.length > 0 ? hints : [
-      "Break down the problem into smaller parts",
-      "Connect concepts to what you already know",
-      "Try explaining the concept in your own words"
-    ];
+    // Only return meaningful, contextual hints
+    return hints.length > 0 && hints[0].length > 30 ? hints : [];
   }
   
   extractConceptsFromResponse(response, questionContext) {
-    // Extract key concepts from the response
-    const commonConcepts = ['Critical Thinking', 'Problem Solving', 'Analysis', 'Comprehension'];
+    // Only extract truly relevant concepts, not generic ones
     const subject = this.detectSubject(response, { text: [response] });
+    const foundConcepts = [];
     
-    if (subject && subject !== 'General') {
-      return [subject, ...commonConcepts.slice(0, 2)];
+    // Only add the detected subject if it's specific and relevant
+    if (subject && 
+        subject !== 'General' && 
+        subject !== 'Programming General' && 
+        subject !== 'Web Development' &&
+        !subject.includes('General')) {
+      foundConcepts.push(subject);
     }
     
-    return commonConcepts.slice(0, 3);
+    // Look for actual concepts mentioned in the content (not generic extraction)
+    const conceptPatterns = [
+      /ethical principles?/i,
+      /data privacy/i,
+      /informed consent/i,
+      /transparency/i,
+      /accountability/i,
+      /bias mitigation/i,
+      /algorithmic fairness/i,
+      /human rights/i,
+      /stakeholder engagement/i,
+      /risk assessment/i
+    ];
+    
+    conceptPatterns.forEach(pattern => {
+      const matches = response.match(pattern);
+      if (matches) {
+        const concept = matches[0].replace(/s$/, ''); // Remove plural
+        const formatted = concept.charAt(0).toUpperCase() + concept.slice(1);
+        if (!foundConcepts.includes(formatted)) {
+          foundConcepts.push(formatted);
+        }
+      }
+    });
+    
+    // Only return if we found meaningful, specific concepts
+    return foundConcepts.length > 0 ? foundConcepts.slice(0, 3) : [];
   }
   
   extractNextStepsFromResponse(response) {
-    // Extract next steps from the response
-    const stepKeywords = ['next', 'should', 'review', 'practice', 'study', 'read'];
-    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 10);
-    
-    const steps = sentences.filter(sentence => 
-      stepKeywords.some(keyword => sentence.toLowerCase().includes(keyword))
-    ).slice(0, 3);
-    
-    return steps.length > 0 ? steps : [
-      "Review related course materials",
-      "Practice with similar problems",
-      "Discuss concepts with classmates"
+    // Only extract actionable next steps, not generic suggestions
+    const stepIndicators = [
+      'you should',
+      'you could',
+      'next, try',
+      'i recommend',
+      'consider doing',
+      'you might want to',
+      'start by',
+      'begin with'
     ];
+    
+    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 25);
+    
+    const steps = sentences.filter(sentence => {
+      const lower = sentence.toLowerCase().trim();
+      return stepIndicators.some(indicator => lower.includes(indicator)) &&
+             !lower.includes('resource') &&
+             !lower.includes('link') &&
+             !lower.includes('http') &&
+             lower.length > 30 &&
+             lower.length < 180;
+    }).slice(0, 2);
+    
+    // Only return meaningful, actionable steps
+    return steps.length > 0 && steps[0].length > 30 ? steps : [];
   }
 
   extractResourcesFromResponse(response, questionContext) {
@@ -2870,69 +3016,13 @@ Focus your response on the Current Question/Section they are viewing and provide
         </div>
       `;
     } else if (response.type === 'educational' || response.type === 'learning_guidance') {
-      // For flexible, natural responses - just render the content as-is
+      // Pure AI response - no generic sections
       let html = `
         <div class="kana-response">
           <h3>${response.title}</h3>
           <div class="kana-response-main">
             ${response.content}
           </div>
-        </div>
-      `;
-      
-      // Only add structured sections if they actually exist and have content
-      if (response.hints && response.hints.length > 0) {
-        html += `
-          <div class="kana-hints">
-            <h4>Learning Hints</h4>
-            <ul>
-              ${response.hints.map(hint => `<li>${hint}</li>`).join('')}
-            </ul>
-          </div>
-        `;
-      }
-      
-      if (response.concepts && response.concepts.length > 0) {
-        html += `
-          <div class="kana-concepts">
-            <h4>Key Concepts</h4>
-            <ul>
-              ${response.concepts.map(concept => `<li>${concept}</li>`).join('')}
-            </ul>
-          </div>
-        `;
-      }
-      
-      if (response.nextSteps && response.nextSteps.length > 0) {
-        html += `
-          <div class="kana-next-steps">
-            <h4>Next Steps</h4>
-            <ul>
-              ${response.nextSteps.map(step => `<li>${step}</li>`).join('')}
-            </ul>
-          </div>
-        `;
-      }
-      
-      if (response.resources && response.resources.length > 0) {
-        html += `
-          <div class="kana-resources">
-            <h4>Helpful Resources</h4>
-            <ul>
-              ${response.resources.map(resource => `
-                <li>
-                  <a href="${resource.url}" target="_blank" rel="noopener noreferrer">
-                    ${resource.title}
-                  </a>
-                  ${resource.description ? ` - ${resource.description}` : ''}
-                </li>
-              `).join('')}
-            </ul>
-          </div>
-        `;
-      }
-      
-      html += `
         </div>
       `;
       
