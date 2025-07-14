@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
         orbSizeValue: document.getElementById('orb-size-value'),
         panelTransparency: document.getElementById('panel-transparency'),
         panelTransparencyValue: document.getElementById('panel-transparency-value'),
+        adaptiveColors: document.getElementById('adaptive-colors'),
         autoHide: document.getElementById('auto-hide'),
         autoHideDelay: document.getElementById('auto-hide-delay'),
         autoHideDelayValue: document.getElementById('auto-hide-delay-value'),
@@ -35,7 +36,18 @@ document.addEventListener('DOMContentLoaded', function() {
         glassBrightnessValue: document.getElementById('glass-brightness-value'),
         glassDepth: document.getElementById('glass-depth'),
         glassDepthValue: document.getElementById('glass-depth-value'),
-        glassPreview: document.getElementById('glass-preview')
+        glassPreview: document.getElementById('glass-preview'),
+        
+        // YouTube API controls
+        youtubeApiKey: document.getElementById('youtube-api-key'),
+        searchMode: document.getElementById('search-mode'),
+        testYouTubeApi: document.getElementById('test-youtube-api'),
+        saveYouTubeSettings: document.getElementById('save-youtube-settings'),
+        
+        // Gemini API controls
+        geminiApiKey: document.getElementById('gemini-api-key'),
+        aiResponseMode: document.getElementById('ai-response-mode'),
+        testGeminiApi: document.getElementById('test-gemini-api')
     };
     
     // Default settings
@@ -46,6 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
         kanaOrbTheme: 'gradient',
         kanaOrbSize: 60,
         kanaPanelTransparency: 95,
+        kanaAdaptiveColors: true,
         kanaAutoHide: true,
         kanaAutoHideDelay: 30,
         kanaWakeSensitivity: 'medium',
@@ -59,7 +72,11 @@ document.addEventListener('DOMContentLoaded', function() {
         glassBlur: 30,
         glassSaturation: 140,
         glassBrightness: 105,
-        glassDepth: 60
+        glassDepth: 60,
+        
+        // YouTube integration defaults
+        youtubeApiKey: '',
+        youtubeSearchMode: 'auto'
     };
     
     // Glass theme definitions (matching content.js)
@@ -136,6 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateToggle(controls.enableKana, settings.kanaEnabled);
                 updateToggle(controls.voiceCommands, settings.kanaVoiceEnabled);
                 updateToggle(controls.autoPosition, settings.kanaAutoPosition);
+                updateToggle(controls.adaptiveColors, settings.kanaAdaptiveColors);
                 updateToggle(controls.autoHide, settings.kanaAutoHide);
                 updateToggle(controls.analytics, settings.kanaAnalytics);
                 updateToggle(controls.contentAnalysis, settings.kanaContentAnalysis);
@@ -188,6 +206,7 @@ document.addEventListener('DOMContentLoaded', function() {
             controls.enableKana.addEventListener('click', () => toggleSwitch(controls.enableKana));
             controls.voiceCommands.addEventListener('click', () => toggleSwitch(controls.voiceCommands));
             controls.autoPosition.addEventListener('click', () => toggleSwitch(controls.autoPosition));
+            controls.adaptiveColors.addEventListener('click', () => toggleSwitch(controls.adaptiveColors));
             controls.autoHide.addEventListener('click', () => toggleSwitch(controls.autoHide));
             controls.analytics.addEventListener('click', () => toggleSwitch(controls.analytics));
             controls.contentAnalysis.addEventListener('click', () => toggleSwitch(controls.contentAnalysis));
@@ -238,6 +257,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 controls.glassDepthValue.textContent = this.value + '%';
                 updateGlassPreview();
             });
+            
+            // YouTube API buttons
+            if (controls.testYouTubeApi) {
+                controls.testYouTubeApi.addEventListener('click', testYouTubeAPI);
+            }
+            
+            if (controls.saveYouTubeSettings) {
+                controls.saveYouTubeSettings.addEventListener('click', saveYouTubeSettings);
+            }
+            
+            if (controls.testGeminiApi) {
+                controls.testGeminiApi.addEventListener('click', testGeminiAPI);
+            }
+            
+            // Auto-save API keys when changed
+            if (controls.geminiApiKey) {
+                controls.geminiApiKey.addEventListener('blur', saveYouTubeSettings);
+                controls.geminiApiKey.addEventListener('input', debounce(saveYouTubeSettings, 2000));
+            }
+            
+            if (controls.aiResponseMode) {
+                controls.aiResponseMode.addEventListener('change', saveYouTubeSettings);
+            }
+            
+            if (controls.youtubeApiKey) {
+                controls.youtubeApiKey.addEventListener('blur', saveYouTubeSettings);
+            }
+        }
+        
+        // Debounce function to prevent too many save calls
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
         }
         
         function updateToggle(element, isActive) {
@@ -262,6 +321,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 kanaOrbTheme: controls.orbTheme.value,
                 kanaOrbSize: parseInt(controls.orbSize.value),
                 kanaPanelTransparency: parseInt(controls.panelTransparency.value),
+                kanaAdaptiveColors: controls.adaptiveColors.classList.contains('active'),
                 kanaAutoHide: controls.autoHide.classList.contains('active'),
                 kanaAutoHideDelay: parseInt(controls.autoHideDelay.value),
                 kanaWakeSensitivity: controls.wakeSensitivity.value,
@@ -379,4 +439,177 @@ document.addEventListener('DOMContentLoaded', function() {
             inset 0 -1px 2px rgba(100, 160, 255, ${0.2 * opacity})
         `;
     }
+    
+    // YouTube API Settings Functions
+    async function loadYouTubeSettings() {
+        try {
+            const result = await chrome.storage.local.get(['youtubeApiKey', 'youtubeSearchMode', 'geminiApiKey', 'aiResponseMode']);
+            
+            if (controls.youtubeApiKey) {
+                controls.youtubeApiKey.value = result.youtubeApiKey || '';
+            }
+            
+            if (controls.searchMode) {
+                controls.searchMode.value = result.youtubeSearchMode || 'auto';
+            }
+            
+            // Load Gemini API settings
+            if (controls.geminiApiKey) {
+                controls.geminiApiKey.value = result.geminiApiKey || '';
+            }
+            
+            if (controls.aiResponseMode) {
+                controls.aiResponseMode.value = result.aiResponseMode || 'auto';
+            }
+            
+            console.log('YouTube and Gemini settings loaded');
+        } catch (error) {
+            console.error('Error loading API settings:', error);
+        }
+    }
+    
+    async function saveYouTubeSettings() {
+        try {
+            const apiKey = controls.youtubeApiKey?.value || '';
+            const searchMode = controls.searchMode?.value || 'auto';
+            const geminiApiKey = controls.geminiApiKey?.value || '';
+            const aiResponseMode = controls.aiResponseMode?.value || 'auto';
+            
+            await chrome.storage.local.set({
+                youtubeApiKey: apiKey,
+                youtubeSearchMode: searchMode,
+                geminiApiKey: geminiApiKey,
+                aiResponseMode: aiResponseMode
+            });
+            
+            // Show success feedback
+            showNotification('API settings saved successfully!', 'success');
+            
+            console.log('YouTube and Gemini API settings saved');
+        } catch (error) {
+            console.error('Error saving API settings:', error);
+            showNotification('Failed to save API settings', 'error');
+        }
+    }
+    
+    async function testYouTubeAPI() {
+        const apiKey = controls.youtubeApiKey?.value;
+        
+        if (!apiKey) {
+            showNotification('Please enter a YouTube API key first', 'warning');
+            return;
+        }
+        
+        try {
+            showNotification('Testing YouTube API connection...', 'info');
+            
+            // Test API with a simple search
+            const testUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=test&type=video&maxResults=1&key=${apiKey}`;
+            const response = await fetch(testUrl);
+            
+            if (response.ok) {
+                const data = await response.json();
+                showNotification('✅ YouTube API connection successful!', 'success');
+                console.log('YouTube API test successful:', data);
+            } else {
+                const errorData = await response.json();
+                showNotification(`❌ YouTube API test failed: ${errorData.error?.message || 'Unknown error'}`, 'error');
+                console.error('YouTube API test failed:', errorData);
+            }
+        } catch (error) {
+            showNotification(`❌ YouTube API test failed: ${error.message}`, 'error');
+            console.error('YouTube API test error:', error);
+        }
+    }
+    
+    async function testGeminiAPI() {
+        const apiKey = controls.geminiApiKey?.value;
+        
+        if (!apiKey) {
+            showNotification('Please enter a Gemini API key first', 'warning');
+            return;
+        }
+        
+        try {
+            showNotification('Testing Gemini API connection...', 'info');
+            
+            // Test API with a simple request
+            const testUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const response = await fetch(testUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: "Hello! This is a test message. Please respond with 'API test successful' if you receive this."
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 50
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response text';
+                showNotification(`✅ Gemini API connection successful! Response: ${responseText.substring(0, 50)}...`, 'success');
+                console.log('Gemini API test successful:', data);
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.error?.message || `HTTP ${response.status} error`;
+                showNotification(`❌ Gemini API test failed: ${errorMessage}`, 'error');
+                console.error('Gemini API test failed:', errorData);
+            }
+        } catch (error) {
+            showNotification(`❌ Gemini API test failed: ${error.message}`, 'error');
+            console.error('Gemini API test error:', error);
+        }
+    }
+    
+    function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        // Style the notification
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : type === 'warning' ? '#ff9800' : '#2196F3'};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Remove after 4 seconds
+        setTimeout(() => {
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 4000);
+    }
+    
+    // Load YouTube settings on page load
+    loadYouTubeSettings();
 });

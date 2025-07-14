@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Data Loading</title>
+</head>
+<body>
+    <h1>Testing External Data Loading</h1>
+    <div id="results"></div>
+
+    <script>
+        // Simulate chrome.runtime.getURL for testing
+        if (typeof chrome === 'undefined') {
+            window.chrome = {
+                runtime: {
+                    getURL: (path) => './' + path
+                }
+            };
+        }
+
+        async function loadDataFiles() {
+            try {
+                // Load glass themes
+                const glassThemesResponse = await fetch(chrome.runtime.getURL('data/glass-themes.js'));
+                const glassThemesText = await glassThemesResponse.text();
+                
+                // Load subject resources
+                const subjectResourcesResponse = await fetch(chrome.runtime.getURL('data/subject-resources.js'));
+                const subjectResourcesText = await subjectResourcesResponse.text();
+                
+                // Parse the data files more carefully
+                let glassThemesModule = {};
+                let subjectResourcesModule = {};
+                
+                try {
+                    // Extract the GLASS_THEMES object
+                    const glassThemesMatch = glassThemesText.match(/export const GLASS_THEMES = (\{[\s\S]*\});?\s*$/);
+                    if (glassThemesMatch) {
+                        const glassThemesCode = glassThemesMatch[1];
+                        glassThemesModule = new Function('return ' + glassThemesCode)();
+                        console.log('Glass themes loaded:', Object.keys(glassThemesModule));
+                    }
+                    
+                    // Extract the SUBJECT_RESOURCES object
+                    const subjectResourcesMatch = subjectResourcesText.match(/export const SUBJECT_RESOURCES = (\{[\s\S]*\});?\s*$/);
+                    if (subjectResourcesMatch) {
+                        const subjectResourcesCode = subjectResourcesMatch[1];
+                        subjectResourcesModule = new Function('return ' + subjectResourcesCode)();
+                        console.log('Subject resources loaded:', Object.keys(subjectResourcesModule));
+                    }
+                } catch (parseError) {
+                    console.warn('Error parsing data files:', parseError);
+                    // Fallback to simple replacement method
+                    glassThemesModule = new Function(glassThemesText.replace('export const GLASS_THEMES =', 'return '))();
+                    subjectResourcesModule = new Function(subjectResourcesText.replace('export const SUBJECT_RESOURCES =', 'return '))();
+                }
+                
+                return { glassThemes: glassThemesModule, subjectResources: subjectResourcesModule };
+            } catch (error) {
+                console.warn('Failed to load external data files, using fallbacks:', error);
+                return { glassThemes: {}, subjectResources: {} };
+            }
+        }
+
+        async function testDataLoading() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Loading data...</p>';
+
+            try {
+                const data = await loadDataFiles();
+                
+                const glassThemeKeys = Object.keys(data.glassThemes);
+                const subjectResourceKeys = Object.keys(data.subjectResources);
+                
+                results.innerHTML = `
+                    <h2>Results:</h2>
+                    <h3>Glass Themes (${glassThemeKeys.length}):</h3>
+                    <ul>${glassThemeKeys.map(key => `<li>${key}</li>`).join('')}</ul>
+                    
+                    <h3>Subject Resources (${subjectResourceKeys.length}):</h3>
+                    <ul>${subjectResourceKeys.map(key => `<li>${key}</li>`).join('')}</ul>
+                    
+                    <h3>Sample Glass Theme (blue):</h3>
+                    <pre>${JSON.stringify(data.glassThemes.blue, null, 2)}</pre>
+                `;
+                
+                console.log('Test completed successfully', data);
+            } catch (error) {
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('Test failed:', error);
+            }
+        }
+
+        // Run test when page loads
+        window.addEventListener('load', testDataLoading);
+    </script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Pouch Test - Kana Extension</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            margin: 0;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+        
+        .test-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #4A90E2;
+        }
+        
+        .test-section h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        
+        .step {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .step-number {
+            display: inline-block;
+            background: #4A90E2;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 25px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .expected-result {
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #28a745;
+            margin-top: 10px;
+        }
+        
+        .note {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #ffc107;
+            margin-top: 10px;
+        }
+        
+        .learning-content {
+            margin: 30px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        
+        .learning-content h2 {
+            margin-top: 0;
+        }
+        
+        .sample-text {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="header">
+            <h1>🎒 Study Pouch Test Page</h1>
+            <p>Test the new Study Pouch functionality with the Kana extension</p>
+        </div>
+        
+        <div class="test-section">
+            <h3>📋 Testing Instructions</h3>
+            
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Look for the Kana orb</strong> - It should appear as a floating blue circle in the bottom-right corner
+                <div class="expected-result">
+                    ✅ Orb visible with proper glassmorphic styling
+                </div>
+            </div>
+            
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>Find the Study Pouch button</strong> - Look for a small 🎒 button near the orb (positioned away from it, not overlapping)
+                <div class="expected-result">
+                    ✅ Study Pouch button visible and properly positioned at top-right of orb with adequate spacing
+                </div>
+            </div>
+            
+            <div class="step">
+                <span class="step-number">3</span>
+                <strong>Click the Study Pouch button</strong> - Click the 🎒 button to open the Study Pouch
+                <div class="expected-result">
+                    ✅ Study Pouch panel opens with 6 components: Notepad, Pomodoro, Music Player, Video Library, Calculator, Task Tracker
+                </div>
+            </div>
+            
+            <div class="step">
+                <span class="step-number">4</span>
+                <strong>Test component dragging</strong> - Drag a component out of the Study Pouch
+                <div class="expected-result">
+                    ✅ Component becomes a standalone floating window that can be moved around
+                </div>
+            </div>
+            
+            <div class="step">
+                <span class="step-number">5</span>
+                <strong>Test component functionality</strong> - Try using a component (e.g., write in notepad, start pomodoro timer)
+                <div class="expected-result">
+                    ✅ Components work as expected with data persistence
+                </div>
+            </div>
+            
+            <div class="step">
+                <span class="step-number">6</span>
+                <strong>Return to pouch</strong> - Click the return button (↵) on a standalone component
+                <div class="expected-result">
+                    ✅ Component returns to the Study Pouch and layout adjusts dynamically
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔧 Debug Information</h3>
+            <div class="note">
+                <strong>Check Console:</strong> Open developer tools (F12) and look at the Console tab for any error messages or debug information about Study Pouch initialization.
+            </div>
+        </div>
+        
+        <div class="learning-content">
+            <h2>📚 Sample Learning Content</h2>
+            <div class="sample-text">
+                <p><strong>JavaScript Fundamentals:</strong> JavaScript is a high-level, interpreted programming language that conforms to the ECMAScript specification. It has dynamic typing, first-class functions, and prototype-based object-orientation.</p>
+                
+                <p><strong>Key Concepts:</strong></p>
+                <ul>
+                    <li><strong>Variables:</strong> Use let, const, and var to declare variables</li>
+                    <li><strong>Functions:</strong> Can be declared as function declarations or arrow functions</li>
+                    <li><strong>Objects:</strong> Collections of key-value pairs</li>
+                    <li><strong>Arrays:</strong> Ordered lists of values</li>
+                    <li><strong>Promises:</strong> Handle asynchronous operations</li>
+                </ul>
+                
+                <p><strong>Example Code:</strong></p>
+                <pre style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 5px; overflow-x: auto;">
+const greeting = (name) => {
+    return `Hello, ${name}! Welcome to JavaScript.`;
+};
+
+const users = ['Alice', 'Bob', 'Charlie'];
+users.forEach(user => {
+    console.log(greeting(user));
+});
+                </pre>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🎯 What to Test with Study Pouch</h3>
+            <p><strong>Use the Study Pouch tools while studying this content:</strong></p>
+            <ul>
+                <li><strong>📝 Notepad:</strong> Take notes about JavaScript concepts</li>
+                <li><strong>⏱️ Pomodoro:</strong> Set a 25-minute study session</li>
+                <li><strong>🎵 Music:</strong> Play focus music while studying</li>
+                <li><strong>📹 Video Library:</strong> Search for JavaScript tutorial videos</li>
+                <li><strong>🧮 Calculator:</strong> Calculate time needed for different study sessions</li>
+                <li><strong>✅ Task Tracker:</strong> Create tasks for different JavaScript topics to learn</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

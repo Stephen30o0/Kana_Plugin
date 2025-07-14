@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real YouTube Video Finder Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 10px;
+            border-left: 4px solid #007acc;
+            margin: 10px 0;
+        }
+        .video-result {
+            background: #e8f5e8;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        #output {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 Real YouTube Video Finder Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Real Video Discovery</h2>
+        <p>This tool finds real, existing educational YouTube videos instead of generating fake URLs.</p>
+        
+        <div>
+            <button onclick="testUnityPrefabs()">Test: Unity Prefabs</button>
+            <button onclick="testUnityUI()">Test: Unity UI</button>
+            <button onclick="testProgramming()">Test: Programming Basics</button>
+            <button onclick="testGameDev()">Test: Game Development</button>
+        </div>
+        
+        <div>
+            <button onclick="testVideoValidation()">Test: Video Validation</button>
+            <button onclick="showStats()">Show Video Database Stats</button>
+            <button onclick="searchAllVideos()">Search All Videos</button>
+            <button onclick="clearOutput()">Clear Output</button>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Output</h2>
+        <div id="output"></div>
+    </div>
+
+    <script src="js/real-youtube-finder.js"></script>
+    <script>
+        let finder = null;
+        
+        function initializeFinder() {
+            if (!finder) {
+                finder = new RealYouTubeVideoFinder();
+                log('✅ Real YouTube Video Finder initialized successfully');
+            }
+            return finder;
+        }
+        
+        function log(message, isVideo = false) {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = isVideo ? 'video-result' : 'result';
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        async function testUnityPrefabs() {
+            const finder = initializeFinder();
+            log('🔍 Searching for Unity Prefabs videos...');
+            
+            try {
+                const videos = await finder.findRealVideos('unity prefabs', 3);
+                log(`Found ${videos.length} Unity Prefabs videos:`);
+                
+                videos.forEach((video, index) => {
+                    log(`${index + 1}. <strong>${video.title}</strong><br>
+                         📺 Channel: ${video.channel}<br>
+                         🔗 URL: <a href="${video.url}" target="_blank">${video.url}</a><br>
+                         ✅ Verified: ${video.verified}`, true);
+                });
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testUnityUI() {
+            const finder = initializeFinder();
+            log('🔍 Searching for Unity UI videos...');
+            
+            try {
+                const videos = await finder.findRealVideos('unity ui buttons', 3);
+                log(`Found ${videos.length} Unity UI videos:`);
+                
+                videos.forEach((video, index) => {
+                    log(`${index + 1}. <strong>${video.title}</strong><br>
+                         📺 Channel: ${video.channel}<br>
+                         🔗 URL: <a href="${video.url}" target="_blank">${video.url}</a><br>
+                         ✅ Verified: ${video.verified}`, true);
+                });
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testProgramming() {
+            const finder = initializeFinder();
+            log('🔍 Searching for Programming Basics videos...');
+            
+            try {
+                const videos = await finder.findRealVideos('programming basics', 3);
+                log(`Found ${videos.length} Programming videos:`);
+                
+                videos.forEach((video, index) => {
+                    log(`${index + 1}. <strong>${video.title}</strong><br>
+                         📺 Channel: ${video.channel}<br>
+                         🔗 URL: <a href="${video.url}" target="_blank">${video.url}</a><br>
+                         ✅ Verified: ${video.verified}`, true);
+                });
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testGameDev() {
+            const finder = initializeFinder();
+            log('🔍 Searching for Game Development videos...');
+            
+            try {
+                const videos = await finder.findRealVideos('game development', 3);
+                log(`Found ${videos.length} Game Development videos:`);
+                
+                videos.forEach((video, index) => {
+                    log(`${index + 1}. <strong>${video.title}</strong><br>
+                         📺 Channel: ${video.channel}<br>
+                         🔗 URL: <a href="${video.url}" target="_blank">${video.url}</a><br>
+                         ✅ Verified: ${video.verified}`, true);
+                });
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testVideoValidation() {
+            const finder = initializeFinder();
+            log('🔍 Testing video validation...');
+            
+            try {
+                // Test with known good video ID
+                const isValid = await finder.quickVideoCheck('F20Jv0y_1Qo');
+                log(`Video validation test: ${isValid ? '✅ Valid' : '❌ Invalid'}`);
+            } catch (error) {
+                log(`❌ Validation error: ${error.message}`);
+            }
+        }
+        
+        function showStats() {
+            const finder = initializeFinder();
+            log('📊 Video Database Statistics:');
+            
+            try {
+                const stats = finder.getStats();
+                log(`Total Categories: ${stats.totalCategories}`);
+                log(`Total Videos: ${stats.totalVideos}`);
+                
+                Object.entries(stats.videosByCategory).forEach(([category, count]) => {
+                    log(`• ${category}: ${count} videos`);
+                });
+            } catch (error) {
+                log(`❌ Error getting stats: ${error.message}`);
+            }
+        }
+        
+        function searchAllVideos() {
+            const finder = initializeFinder();
+            const query = prompt('Enter search term:');
+            if (!query) return;
+            
+            log(`🔍 Searching all videos for: "${query}"`);
+            
+            try {
+                const results = finder.searchAllVideos(query);
+                log(`Found ${results.length} matching videos:`);
+                
+                results.slice(0, 5).forEach((video, index) => {
+                    log(`${index + 1}. <strong>${video.title}</strong><br>
+                         📺 Channel: ${video.channel}<br>
+                         📂 Category: ${video.category}<br>
+                         🎯 Relevance: ${video.relevance}`, true);
+                });
+                
+                if (results.length > 5) {
+                    log(`... and ${results.length - 5} more results`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 Real YouTube Video Finder Test Page Loaded');
+            log('Click any test button to verify the functionality');
+        });
+    </script>
+</body>
+</html>

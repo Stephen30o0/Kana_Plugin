@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete YouTube Search Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        .search-section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .result-item {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #90caf9;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: 500;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        input, select {
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            margin: 5px;
+        }
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .status.success { background: rgba(76, 175, 80, 0.2); }
+        .status.error { background: rgba(244, 67, 54, 0.2); }
+        .status.warning { background: rgba(255, 152, 0, 0.2); }
+        .status.info { background: rgba(33, 150, 243, 0.2); }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .video-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .video-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #90caf9;
+        }
+        .video-channel {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .video-url {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            word-break: break-all;
+        }
+        .search-mode {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border-left: 3px solid #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Complete YouTube Search System Test</h1>
+        <p>This demonstrates both static database and live YouTube API search capabilities.</p>
+        
+        <div class="search-section">
+            <h2>🔑 API Configuration</h2>
+            <input type="password" id="api-key" placeholder="Enter your YouTube Data API v3 key (optional)" style="width: 400px;">
+            <button onclick="setApiKey()">Set API Key</button>
+            <button onclick="testApiKey()">Test API Key</button>
+            <div id="api-status"></div>
+        </div>
+        
+        <div class="search-section">
+            <h2>🔍 Search Educational Videos</h2>
+            <input type="text" id="search-query" placeholder="Enter topic (e.g., 'Unity prefabs', 'JavaScript basics')" style="width: 300px;">
+            <select id="search-mode">
+                <option value="auto">Auto (API if available, fallback to database)</option>
+                <option value="live">Live Search Only (requires API key)</option>
+                <option value="database">Static Database Only</option>
+            </select>
+            <button onclick="searchVideos()">Search Videos</button>
+        </div>
+        
+        <div class="search-section">
+            <h2>🚀 Quick Tests</h2>
+            <button onclick="quickTest('Unity prefabs')">Test: Unity Prefabs</button>
+            <button onclick="quickTest('JavaScript tutorial')">Test: JavaScript</button>
+            <button onclick="quickTest('Python basics')">Test: Python</button>
+            <button onclick="quickTest('React components')">Test: React</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+        
+        <div id="current-mode" class="search-mode">
+            <strong>Current Mode:</strong> <span id="mode-display">Auto</span>
+        </div>
+        
+        <div id="results-container"></div>
+    </div>
+
+    <script src="js/real-youtube-finder.js"></script>
+    <script src="js/live-youtube-searcher.js"></script>
+    <script>
+        let staticFinder = null;
+        let liveFinder = null;
+        let currentApiKey = '';
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            staticFinder = new RealYouTubeVideoFinder();
+            liveFinder = new LiveYouTubeSearcher();
+            showStatus('System initialized - Static database ready, Live search needs API key', 'info');
+        });
+        
+        function showStatus(message, type = 'info') {
+            const container = document.getElementById('api-status');
+            container.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        function showResults(videos, searchQuery, mode) {
+            const container = document.getElementById('results-container');
+            
+            if (videos.length === 0) {
+                container.innerHTML = `
+                    <div class="search-section">
+                        <h3>❌ No Results Found</h3>
+                        <p>No videos found for "${searchQuery}" using ${mode} mode.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const modeIcon = mode === 'live' ? '🌐' : mode === 'database' ? '📚' : '🔄';
+            
+            container.innerHTML = `
+                <div class="search-section">
+                    <h3>${modeIcon} Search Results (${mode} mode)</h3>
+                    <p>Found ${videos.length} videos for "<strong>${searchQuery}</strong>"</p>
+                    <div class="video-grid" id="video-grid"></div>
+                </div>
+            `;
+            
+            const grid = document.getElementById('video-grid');
+            videos.forEach((video, index) => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.innerHTML = `
+                    <div class="video-title">${video.title}</div>
+                    <div class="video-channel">📺 ${video.channel}</div>
+                    ${video.isRealSearch ? '<div style="color: #4CAF50; font-size: 12px;">✅ Live API Result</div>' : ''}
+                    ${video.verified ? '<div style="color: #90caf9; font-size: 12px;">🔒 Verified Educational</div>' : ''}
+                    <div class="video-url">
+                        <a href="${video.url}" target="_blank" style="color: #90caf9;">${video.url}</a>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+        
+        function setApiKey() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            if (apiKey) {
+                currentApiKey = apiKey;
+                liveFinder = new LiveYouTubeSearcher(apiKey);
+                showStatus('✅ API key set successfully', 'success');
+            } else {
+                currentApiKey = '';
+                liveFinder = new LiveYouTubeSearcher();
+                showStatus('API key cleared - using public APIs only', 'warning');
+            }
+        }
+        
+        async function testApiKey() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            if (!apiKey) {
+                showStatus('❌ Please enter an API key first', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('🔄 Testing API key...', 'info');
+                
+                const testUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=test&type=video&maxResults=1&key=${apiKey}`;
+                const response = await fetch(testUrl);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus('✅ API key is valid and working!', 'success');
+                    setApiKey(); // Auto-set if valid
+                } else {
+                    const errorData = await response.json();
+                    showStatus(`❌ API key test failed: ${errorData.error?.message || 'Invalid key'}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ API test error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function searchVideos() {
+            const query = document.getElementById('search-query').value.trim();
+            const mode = document.getElementById('search-mode').value;
+            
+            if (!query) {
+                showStatus('❌ Please enter a search query', 'error');
+                return;
+            }
+            
+            document.getElementById('mode-display').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+            showStatus(`🔍 Searching for "${query}" using ${mode} mode...`, 'info');
+            
+            try {
+                let results = [];
+                
+                if (mode === 'live') {
+                    if (!currentApiKey) {
+                        showStatus('❌ Live search requires API key', 'error');
+                        return;
+                    }
+                    results = await liveFinder.searchEducationalVideos(query, 6);
+                    showResults(results, query, 'live');
+                } else if (mode === 'database') {
+                    results = await staticFinder.findRealVideos(query, 6);
+                    showResults(results, query, 'database');
+                } else { // auto mode
+                    // Try live first if API key available
+                    if (currentApiKey) {
+                        try {
+                            results = await liveFinder.searchEducationalVideos(query, 4);
+                            if (results.length > 0) {
+                                showResults(results, query, 'live (auto)');
+                                showStatus(`✅ Found ${results.length} videos using live search`, 'success');
+                                return;
+                            }
+                        } catch (error) {
+                            console.warn('Live search failed, falling back to database:', error);
+                        }
+                    }
+                    
+                    // Fallback to database
+                    results = await staticFinder.findRealVideos(query, 6);
+                    showResults(results, query, 'database (auto)');
+                    showStatus(`✅ Found ${results.length} videos using static database`, 'success');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Search error: ${error.message}`, 'error');
+                console.error('Search error:', error);
+            }
+        }
+        
+        async function quickTest(query) {
+            document.getElementById('search-query').value = query;
+            await searchVideos();
+        }
+        
+        function clearResults() {
+            document.getElementById('results-container').innerHTML = '';
+            document.getElementById('search-query').value = '';
+            showStatus('Results cleared', 'info');
+        }
+    </script>
+</body>
+</html>

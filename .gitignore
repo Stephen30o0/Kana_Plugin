@@ -18,6 +18,8 @@ yarn-error.log*
 .env.production.local
 config.local.js
 secrets.js
+google-credentials.json
+api-keys.json
 
 # IDE and editor files
 .vscode/settings.json

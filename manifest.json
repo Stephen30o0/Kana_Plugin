@@ -19,6 +19,9 @@
     "*://*.alustudent.com/*",
     "*://intranet.alustudent.com/*",
     "*://localhost/*",
+    "*://generativelanguage.googleapis.com/*",
+    "*://www.googleapis.com/*",
+    "*://www.youtube.com/*",
     "*://*/*"
   ],
   "background": {
@@ -37,8 +40,8 @@
         "*://intranet.alustudent.com/*",
         "*://*/*"
       ],
-      "js": ["content.js"],
-      "css": ["kana-styles.css"],
+      "js": ["js/error-handler.js", "js/url-validator.js", "js/demo-response-generator.js", "js/youtube-pip-manager.js", "js/real-youtube-finder.js", "js/live-youtube-searcher.js", "js/study-pouch-manager.js", "js/study-pouch-components.js", "js/study-pouch-components-extended.js", "js/kana-voice-recognition.js", "js/kana-voice-integration.js", "js/kana-voice-enhancement.js", "content.js"],
+      "css": ["kana-styles.css", "css/study-pouch-styles.css"],
       "run_at": "document_end"
     }
   ],
@@ -48,7 +51,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["kana-styles.css"],
+      "resources": ["kana-styles.css", "data/glass-themes.js", "data/subject-resources.js", "js/error-handler.js", "js/url-validator.js", "js/demo-response-generator.js", "js/youtube-pip-manager.js"],
       "matches": ["<all_urls>"]
     }
   ],

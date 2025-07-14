@@ -19,6 +19,14 @@
   transition: none;
 }
 
+/* YouTube PiP Container Dragging State */
+.kana-pip-container.dragging {
+  cursor: grabbing !important;
+  transition: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 /* The Main Orb */
 .kana-orb {
   width: 60px;
@@ -30,9 +38,9 @@
     linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%),
     #4A90E2;
   box-shadow: 
-    0 12px 25px rgba(74, 144, 226, 0.4),
-    0 8px 15px rgba(53, 122, 189, 0.3),
-    0 4px 8px rgba(46, 109, 164, 0.25),
+    0 6px 15px rgba(74, 144, 226, 0.3),
+    0 4px 8px rgba(53, 122, 189, 0.25),
+    0 2px 4px rgba(46, 109, 164, 0.2),
     inset 0 1px 2px rgba(255, 255, 255, 0.3),
     inset 0 -1px 2px rgba(0, 0, 0, 0.1);
   cursor: grab;
@@ -48,9 +56,9 @@
 .kana-orb:hover {
   transform: scale(1.08) translateY(-3px);
   box-shadow: 
-    0 16px 35px rgba(74, 144, 226, 0.5),
-    0 12px 20px rgba(53, 122, 189, 0.4),
-    0 6px 12px rgba(46, 109, 164, 0.35),
+    0 8px 20px rgba(74, 144, 226, 0.4),
+    0 6px 12px rgba(53, 122, 189, 0.3),
+    0 3px 6px rgba(46, 109, 164, 0.25),
     inset 0 1px 3px rgba(255, 255, 255, 0.4),
     inset 0 -1px 2px rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.5);
@@ -85,7 +93,7 @@
 .kana-orb-icon {
   width: 24px;
   height: 24px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
   font-size: 20px;
   display: flex;
   align-items: center;
@@ -245,13 +253,13 @@
 
 /* Dark Theme AI Response Formatting */
 .kana-chat-panel.adaptive-dark .kana-ai-response {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--theme-text, rgba(255, 255, 255, 0.9)) !important;
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response h2,
 .kana-chat-panel.adaptive-dark .kana-ai-response h3,
 .kana-chat-panel.adaptive-dark .kana-ai-response h4 {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response h2 {
@@ -259,11 +267,11 @@
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response strong {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response em {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--theme-text, rgba(255, 255, 255, 0.85)) !important;
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response code {
@@ -273,11 +281,11 @@
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response li {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--theme-text, rgba(255, 255, 255, 0.85)) !important;
 }
 
 .kana-chat-panel.adaptive-dark .kana-ai-response li strong {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
 }
 
 /* Light Theme AI Response Formatting */
@@ -338,9 +346,9 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
   box-shadow: 
-    0 25px 45px rgba(70, 130, 240, 0.15),
-    0 10px 25px rgba(100, 160, 255, 0.1),
-    0 5px 15px rgba(0, 0, 0, 0.05),
+    0 12px 25px rgba(70, 130, 240, 0.12),
+    0 5px 15px rgba(100, 160, 255, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04),
     inset 0 1px 2px rgba(255, 255, 255, 0.6),
     inset 0 -1px 2px rgba(100, 160, 255, 0.2);
   display: flex;
@@ -401,8 +409,8 @@
     inset 0 2px 4px rgba(70, 130, 240, 0.1),
     inset 0 1px 2px rgba(50, 110, 220, 0.05),
     inset 0 -1px 2px rgba(255, 255, 255, 0.4),
-    0 2px 8px rgba(70, 130, 240, 0.12),
-    0 1px 3px rgba(0, 0, 0, 0.05);
+    0 1px 4px rgba(70, 130, 240, 0.08),
+    0 0.5px 1.5px rgba(0, 0, 0, 0.04);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -415,8 +423,8 @@
     inset 0 2px 4px rgba(70, 130, 240, 0.08),
     inset 0 1px 2px rgba(50, 110, 220, 0.04),
     inset 0 -1px 2px rgba(255, 255, 255, 0.5),
-    0 4px 12px rgba(70, 130, 240, 0.15),
-    0 2px 6px rgba(0, 0, 0, 0.08);
+    0 2px 6px rgba(70, 130, 240, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.06);
   background: 
     linear-gradient(135deg, rgba(250, 252, 255, 0.3) 0%, rgba(240, 248, 255, 0.2) 50%, rgba(230, 245, 255, 0.25) 100%),
     linear-gradient(225deg, rgba(130, 190, 255, 0.18) 0%, rgba(110, 170, 255, 0.1) 50%, rgba(90, 150, 255, 0.12) 100%);
@@ -424,7 +432,7 @@
 }
 
 .kana-chat-input::placeholder {
-  color: rgba(70, 90, 130, 0.6);
+  color: var(--theme-text, rgba(70, 90, 130, 0.6)) !important;
   font-weight: 300;
 }
 
@@ -442,15 +450,15 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-top: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
   font-size: 14px;
   font-weight: 400;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(20px) saturate(1.8);
   box-shadow: 
-    0 4px 12px rgba(70, 130, 240, 0.25),
-    0 2px 4px rgba(30, 100, 220, 0.2),
+    0 2px 6px rgba(70, 130, 240, 0.2),
+    0 1px 2px rgba(30, 100, 220, 0.15),
     inset 0 1px 2px rgba(255, 255, 255, 0.3),
     inset 0 -1px 2px rgba(0, 0, 0, 0.1);
   display: flex;
@@ -464,8 +472,8 @@
 .kana-send-button:hover {
   transform: translateY(-50%) scale(1.1);
   box-shadow: 
-    0 6px 16px rgba(70, 130, 240, 0.35),
-    0 3px 6px rgba(30, 100, 220, 0.25),
+    0 3px 8px rgba(70, 130, 240, 0.3),
+    0 1.5px 3px rgba(30, 100, 220, 0.2),
     inset 0 1px 3px rgba(255, 255, 255, 0.4),
     inset 0 -1px 3px rgba(0, 0, 0, 0.15);
   background: 
@@ -518,131 +526,368 @@
   opacity: 1;
 }
 
-/* Glass reflection effects */
-.kana-chat-panel::before {
-  content: '';
+/* Study Pouch Toggle Button */
+.kana-study-pouch-toggle {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border-radius: 20px;
-  background: linear-gradient(135deg, rgba(180, 220, 255, 0.06) 0%, rgba(200, 230, 255, 0.04) 50%, rgba(220, 240, 255, 0.05) 100%);
-  z-index: 0;
-  pointer-events: none;
-}
-
-.kana-chat-panel::after {
-  content: '';
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
-  height: 3px;
-  background: linear-gradient(90deg, rgba(100, 160, 255, 0.3) 0%, rgba(150, 200, 255, 0.6) 10%, rgba(200, 230, 255, 0.9) 50%, rgba(150, 200, 255, 0.6) 90%, rgba(100, 160, 255, 0.3) 100%);
-  border-radius: 3px;
-  pointer-events: none;
-  z-index: 2;
-  box-shadow: 0 1px 2px rgba(100, 160, 255, 0.3);
-}
-
-/* Additional glass depth effect */
-.kana-chat-panel {
-  position: relative;
-}
-
-.kana-chat-panel:before {
-  filter: blur(0.5px);
-}
-
-/* Enhanced orb glass reflection */
-.kana-orb::before {
-  content: '';
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 24px;
-  height: 24px;
-  background: radial-gradient(circle, rgba(240, 250, 255, 0.9) 0%, rgba(200, 230, 255, 0.6) 40%, rgba(150, 200, 255, 0.3) 70%, transparent 100%);
+  top: -12px;
+  right: -20px;
+  width: 28px;
+  height: 28px;
+  background: var(--theme-accent, #4A90E2);
+  border: 2px solid rgba(255, 255, 255, 0.6);
   border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
-  filter: blur(0.5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--theme-text, white) !important;
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px) saturate(1.2);
+  z-index: 10;
+  opacity: 0.9;
 }
 
-.kana-orb::after {
-  content: '';
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  width: 8px;
-  height: 8px;
-  background: rgba(250, 255, 255, 0.95);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 2;
-  box-shadow: 0 0 4px rgba(200, 230, 255, 0.8);
+.kana-study-pouch-toggle:hover {
+  transform: scale(1.1);
+  background: var(--theme-secondary, #357ABD);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    0 3px 8px rgba(0, 0, 0, 0.2),
+    0 1.5px 4px rgba(0, 0, 0, 0.15);
+  opacity: 1;
 }
 
-/* Chat input glass enhancement */
-.kana-chat-input::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(135deg, rgba(120, 180, 255, 0.25) 0%, rgba(100, 160, 255, 0.2) 30%, rgba(140, 200, 255, 0.15) 60%, rgba(80, 150, 255, 0.12) 100%);
-  border-radius: 12px 12px 0 0;
-  pointer-events: none;
-  z-index: 0;
+.kana-study-pouch-toggle:active {
+  transform: scale(0.95);
 }
 
-/* Send button glass enhancement */
-.kana-send-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(135deg, rgba(150, 200, 255, 0.45) 0%, rgba(120, 180, 255, 0.35) 30%, rgba(180, 220, 255, 0.25) 60%, rgba(100, 160, 255, 0.2) 100%);
-  border-radius: 8px 8px 0 0;
+/* Hide toggle when dragging */
+.kana-orb-container.dragging .kana-study-pouch-toggle {
+  opacity: 0.5;
   pointer-events: none;
-  z-index: 0;
 }
 
-/* Add subtle edge lighting */
-.kana-chat-input,
-.kana-send-button {
+/* Study Pouch Container and Components */
+.kana-study-pouch {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-sizing: border-box;
+  /* Default more opaque background for better visibility */
+  background: var(--theme-bg, rgba(255, 255, 255, 0.8)) !important;
+  backdrop-filter: blur(20px) !important;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+}
+
+.kana-study-pouch * {
+  box-sizing: border-box;
+  color: inherit;
+}
+
+.study-pouch-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--theme-accent, rgba(255, 255, 255, 0.2));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pouch-title {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+}
+
+.pouch-icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.pouch-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.pouch-add-btn,
+.pouch-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: var(--theme-accent, rgba(255, 255, 255, 0.15));
+  color: var(--theme-text, rgba(255, 255, 255, 0.9)) !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.pouch-add-btn:hover,
+.pouch-close-btn:hover {
+  background: var(--theme-accent, rgba(255, 255, 255, 0.25));
+  color: var(--theme-text, rgba(255, 255, 255, 1)) !important;
+}
+
+.study-pouch-content {
+  padding: 16px;
+}
+
+.components-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  min-height: 120px;
+}
+
+.study-component {
+  padding: 12px;
+  border-radius: 12px !important;
+  cursor: grab;
+  transition: all 0.2s ease;
   position: relative;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--theme-accent, rgba(255, 255, 255, 0.3)) !important;
+  /* Default more opaque background for better visibility */
+  background: var(--theme-bg, rgba(255, 255, 255, 0.6)) !important;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+}
+
+/* Ensure all child elements inherit the theme text color */
+.study-component * {
+  color: inherit;
+}
+
+.study-component:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 25px rgba(0, 0, 0, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.study-component:active {
+  transform: translateY(0);
+}
+
+.study-component.dragging {
+  opacity: 0.3;
+}
+
+.component-icon {
+  font-size: 20px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.component-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+  line-height: 1.2;
+}
+
+.component-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--theme-text, rgba(255, 255, 255, 0.8)) !important;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.study-component:hover .component-close {
+  opacity: 1;
+}
+
+.component-close:hover {
+  background: rgba(255, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Standalone Component Styles */
+.study-component-standalone {
+  min-width: 300px;
+  max-width: 500px;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--theme-accent, rgba(255, 255, 255, 0.4)) !important;
+  border-radius: 12px !important;
+  box-shadow: 
+    0 10px 20px rgba(0, 0, 0, 0.1),
+    0 5px 10px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
   overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  cursor: grab;
+  /* Default more opaque background for standalone components */
+  background: var(--theme-bg, rgba(255, 255, 255, 0.7)) !important;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
 }
 
-.kana-chat-input::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  right: 1px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(100, 160, 255, 0.4) 0%, rgba(150, 200, 255, 0.7) 20%, rgba(200, 230, 255, 0.9) 50%, rgba(150, 200, 255, 0.7) 80%, rgba(100, 160, 255, 0.4) 100%);
-  border-radius: 12px;
-  pointer-events: none;
-  z-index: 1;
+/* Ensure all child elements in standalone components inherit the theme text color */
+.study-component-standalone * {
+  color: inherit;
 }
 
-.kana-send-button::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  right: 1px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(120, 180, 255, 0.5) 0%, rgba(170, 220, 255, 0.8) 20%, rgba(220, 240, 255, 1) 50%, rgba(170, 220, 255, 0.8) 80%, rgba(120, 180, 255, 0.5) 100%);
+.standalone-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--theme-accent, rgba(255, 255, 255, 0.2));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--theme-accent, rgba(255, 255, 255, 0.05));
+}
+
+.standalone-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.standalone-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.standalone-minimize,
+.standalone-close {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: var(--theme-accent, rgba(255, 255, 255, 0.15));
+  color: var(--theme-text, rgba(255, 255, 255, 0.9)) !important;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.standalone-minimize:hover,
+.standalone-close:hover {
+  background: var(--theme-accent, rgba(255, 255, 255, 0.25));
+  color: var(--theme-text, rgba(255, 255, 255, 1)) !important;
+}
+
+.standalone-content {
+  padding: 16px;
+}
+
+/* Component Selector */
+.add-component-zone {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--theme-accent, rgba(255, 255, 255, 0.15));
+}
+
+.selector-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+  margin-bottom: 12px;
+}
+
+.component-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.component-option {
+  padding: 12px;
+  border: 1px solid var(--theme-accent, rgba(255, 255, 255, 0.2));
   border-radius: 8px;
-  pointer-events: none;
-  z-index: 1;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: all 0.2s ease;
+  background: var(--theme-accent, rgba(255, 255, 255, 0.05));
+}
+
+.component-option:hover {
+  background: var(--theme-accent, rgba(255, 255, 255, 0.15));
+  border-color: var(--theme-accent, rgba(255, 255, 255, 0.4));
+  transform: translateY(-1px);
+}
+
+.component-option .component-icon {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.component-option .component-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--theme-text, rgba(255, 255, 255, 0.9)) !important;
+}
+
+/* Comprehensive Theme Color Inheritance - Override all white text */
+.kana-study-pouch *,
+.study-component *,
+.study-component-standalone *,
+.kana-chat-panel *,
+.kana-orb-container * {
+  color: inherit !important;
+}
+
+/* Force theme text color for all text elements */
+.kana-study-pouch,
+.kana-study-pouch *:not([class*="icon"]),
+.study-component,
+.study-component *:not([class*="icon"]),
+.study-component-standalone,
+.study-component-standalone *:not([class*="icon"]),
+.kana-chat-panel,
+.kana-chat-panel *:not([class*="icon"]),
+.kana-response-content,
+.kana-response-content *,
+.kana-chat-input,
+.kana-chat-input::placeholder {
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
+}
+
+/* Specific overrides for white text elements */
+input::placeholder,
+textarea::placeholder {
+  color: var(--theme-text, rgba(255, 255, 255, 0.6)) !important;
+}
+
+/* Global white text override */
+*[style*="color: white"],
+*[style*="color: #fff"],
+*[style*="color: #ffffff"],
+*[style*="color: rgb(255, 255, 255)"],
+*[style*="color: rgba(255, 255, 255"] {
+  color: var(--theme-text, rgba(255, 255, 255, 0.95)) !important;
 }
 
 /* Animations */
@@ -662,312 +907,370 @@
   75% { transform: scale(0.9); }
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .kana-orb {
-    width: 50px;
-    height: 50px;
-  }
-  
-  .kana-orb-icon {
-    width: 20px;
-    height: 20px;
-    font-size: 16px;
-  }
-  
-  .kana-chat-panel {
-    width: 280px;
-    max-width: 85vw;
-  }
-}
+/* Enhanced Voice Recognition Styles */
 
-/* Accessibility */
-.kana-orb:focus {
-  outline: 2px solid #667eea;
-  outline-offset: 2px;
-}
-
-.kana-orb-container[aria-pressed="true"] .kana-orb {
-  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-}
-
-/* Hide scrollbars but keep functionality */
-.kana-response-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.kana-response-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-.kana-response-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
-}
-
-.kana-response-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
-}
-
-/* Adaptive coloring for panels */
-.kana-chat-panel.adaptive-dark {
-  background: linear-gradient(135deg, rgba(20, 20, 20, 0.15) 0%, rgba(0, 0, 0, 0.25) 100%),
-              linear-gradient(225deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-top: 1px solid rgba(255, 255, 255, 0.25);
-  border-left: 1px solid rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(25px) brightness(1.1);
-  box-shadow: 0 25px 45px rgba(0, 0, 0, 0.2),
-              0 10px 25px rgba(0, 0, 0, 0.1),
-              inset 0 1px 0 rgba(255, 255, 255, 0.3),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.kana-chat-panel.adaptive-dark .kana-response-content,
-.kana-chat-panel.adaptive-dark .kana-response-content h3 {
+/* Voice Transcript Overlay */
+.kana-voice-transcript {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
   color: rgba(255, 255, 255, 0.95);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.kana-chat-panel.adaptive-dark .kana-response-content p,
-.kana-chat-panel.adaptive-dark .kana-response-content li {
-  color: rgba(255, 255, 255, 0.85);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.kana-chat-panel.adaptive-dark .kana-response-content a {
-  color: rgba(173, 216, 230, 0.95);
-  border-bottom: 1px solid rgba(173, 216, 230, 0.3);
-}
-
-.kana-chat-panel.adaptive-dark .kana-chat-input {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 100%),
-              linear-gradient(225deg, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
+  padding: 12px 20px;
+  border-radius: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  z-index: 2147483648;
+  max-width: 80vw;
+  text-align: center;
+  backdrop-filter: blur(15px) saturate(1.8);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-top: 1px solid rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 0.95);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 8px 25px rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
-.kana-chat-panel.adaptive-dark .kana-chat-input:focus {
-  border-color: rgba(173, 216, 230, 0.6);
-  box-shadow: 0 0 0 3px rgba(173, 216, 230, 0.2),
-              inset 0 1px 3px rgba(0, 0, 0, 0.1),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.3);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%),
-              linear-gradient(225deg, rgba(255, 255, 255, 0.12) 0%, transparent 50%);
+.kana-voice-transcript.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
-.kana-chat-panel.adaptive-dark .kana-chat-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+.kana-voice-transcript.final {
+  background: rgba(74, 226, 144, 0.9);
+  border-color: rgba(74, 226, 144, 0.4);
+  box-shadow: 
+    0 8px 25px rgba(74, 226, 144, 0.3),
+    0 4px 12px rgba(74, 226, 144, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.3);
 }
 
-/* Light glass style for dark backgrounds */
-.kana-chat-panel.adaptive-light {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.25) 100%),
-              linear-gradient(225deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-top: 1px solid rgba(255, 255, 255, 0.5);
-  border-left: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(25px) brightness(1.1);
-  box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3),
-              0 10px 25px rgba(0, 0, 0, 0.15),
-              inset 0 1px 0 rgba(255, 255, 255, 0.6),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+/* Enhanced Voice Indicator */
+.kana-enhanced-voice-indicator {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  background: #4AE290;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(74, 226, 144, 0.8);
+  opacity: 1;
+  transition: all 0.3s ease;
+  animation: enhanced-voice-pulse 2s infinite;
 }
 
-.kana-chat-panel.adaptive-light .kana-response-content,
-.kana-chat-panel.adaptive-light .kana-response-content h3 {
-  color: rgba(0, 0, 0, 0.85);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@keyframes enhanced-voice-pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
 }
 
-.kana-chat-panel.adaptive-light .kana-response-content p,
-.kana-chat-panel.adaptive-light .kana-response-content li {
-  color: rgba(0, 0, 0, 0.75);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Voice Backend Status Indicator */
+.kana-voice-backend-status {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  z-index: 5;
 }
 
-.kana-chat-panel.adaptive-light .kana-response-content a {
-  color: rgba(13, 71, 161, 0.95);
-  border-bottom: 1px solid rgba(13, 71, 161, 0.3);
+.kana-voice-backend-status.connected {
+  background: #4AE290;
+  box-shadow: 0 0 6px rgba(74, 226, 144, 0.6);
 }
 
-.kana-chat-panel.adaptive-light .kana-chat-input {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%),
-              linear-gradient(225deg, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-top: 1px solid rgba(255, 255, 255, 0.6);
-  color: rgba(20, 20, 20, 0.95);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.4);
+.kana-voice-backend-status.fallback {
+  background: #FFB347;
+  box-shadow: 0 0 6px rgba(255, 179, 71, 0.6);
 }
 
-.kana-chat-panel.adaptive-light .kana-chat-input:focus {
-  border-color: rgba(13, 71, 161, 0.6);
-  box-shadow: 0 0 0 3px rgba(13, 71, 161, 0.2),
-              inset 0 1px 3px rgba(0, 0, 0, 0.05),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.5);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%),
-              linear-gradient(225deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+/* Enhanced Orb States for Voice */
+.kana-orb.enhanced-listening {
+  background: linear-gradient(135deg, #4AE290 0%, #2ECC71 100%);
+  animation: enhanced-pulse 1.5s ease-in-out infinite;
+  box-shadow: 
+    0 8px 25px rgba(74, 226, 144, 0.4),
+    0 4px 12px rgba(46, 204, 113, 0.3),
+    inset 0 1px 3px rgba(255, 255, 255, 0.4);
 }
 
-.kana-chat-panel.adaptive-light .kana-chat-input::placeholder {
-  color: rgba(20, 20, 20, 0.5);
+.kana-orb.enhanced-processing {
+  background: linear-gradient(135deg, #3498DB 0%, #2980B9 100%);
+  animation: enhanced-spin 2s linear infinite;
+  box-shadow: 
+    0 8px 25px rgba(52, 152, 219, 0.4),
+    0 4px 12px rgba(41, 128, 185, 0.3),
+    inset 0 1px 3px rgba(255, 255, 255, 0.4);
 }
 
-/* Demo Mode Styles */
-.kana-demo-mode {
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%);
-  border: 1px solid rgba(255, 193, 7, 0.3);
+.kana-orb.wake-word-detected {
+  background: linear-gradient(135deg, #E74C3C 0%, #C0392B 100%);
+  animation: wake-word-flash 0.5s ease-in-out 3;
+  box-shadow: 
+    0 8px 25px rgba(231, 76, 60, 0.5),
+    0 4px 12px rgba(192, 57, 43, 0.4),
+    inset 0 1px 3px rgba(255, 255, 255, 0.4);
+}
+
+@keyframes enhanced-pulse {
+  0%, 100% { 
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.05) translateY(-2px);
+    opacity: 0.9;
+  }
+}
+
+@keyframes enhanced-spin {
+  0% { 
+    transform: rotate(0deg) scale(1);
+  }
+  50% { 
+    transform: rotate(180deg) scale(1.03);
+  }
+  100% { 
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes wake-word-flash {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Voice Error Notification */
+.kana-voice-error {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(231, 76, 60, 0.95);
+  color: white;
+  padding: 12px 16px;
   border-radius: 8px;
-  padding: 16px;
-  margin: 12px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  z-index: 2147483648;
   backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 8px 25px rgba(231, 76, 60, 0.3),
+    0 4px 12px rgba(192, 57, 43, 0.2);
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.kana-demo-mode p:first-child {
-  color: #ff6b35;
-  font-weight: 600;
-  margin-bottom: 12px;
+.kana-voice-error.visible {
+  transform: translateX(0);
 }
 
-.kana-demo-mode em {
-  color: #666;
-  font-size: 0.9em;
+/* Voice Quality Indicator */
+.kana-voice-quality {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background: linear-gradient(90deg, #E74C3C 0%, #F39C12 50%, #2ECC71 100%);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-.kana-page-analysis {
-  background: rgba(70, 130, 240, 0.1);
-  border: 1px solid rgba(70, 130, 240, 0.2);
-  border-radius: 6px;
-  padding: 12px;
-  margin: 12px 0;
+.kana-orb.enhanced-listening .kana-voice-quality {
+  opacity: 1;
 }
 
-.kana-page-analysis h4 {
-  color: #4682f0;
-  margin: 0 0 8px 0;
-  font-size: 14px;
+/* Voice Command Suggestions */
+.kana-voice-suggestions {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  z-index: 2147483647;
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  max-width: 300px;
+  text-align: center;
 }
 
-.kana-page-analysis ul {
-  margin: 8px 0;
-  padding-left: 20px;
+.kana-voice-suggestions.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
-.kana-page-analysis li {
-  margin: 4px 0;
-  color: #333;
-  font-size: 13px;
+.kana-voice-suggestions .suggestion-item {
+  display: block;
+  margin: 2px 0;
+  opacity: 0.7;
 }
 
-.kana-response-content h3 {
-  color: #4682f0;
-  margin: 0 0 16px 0;
-  font-size: 18px;
+.kana-voice-suggestions .suggestion-item:first-child {
+  opacity: 1;
+  font-weight: 500;
 }
 
-.kana-response-content h4 {
-  color: #333;
-  margin: 16px 0 8px 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.kana-response-content ul {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.kana-response-content li {
-  margin: 4px 0;
-  color: #444;
-  font-size: 13px;
+/* Responsive Voice UI */
+@media (max-width: 768px) {
+  .kana-voice-transcript {
+    bottom: 15px;
+    max-width: 90vw;
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+  
+  .kana-voice-suggestions {
+    bottom: 70px;
+    max-width: 90vw;
+    font-size: 11px;
+  }
+  
+  .kana-voice-error {
+    top: 15px;
+    right: 15px;
+    font-size: 13px;
+    padding: 10px 14px;
+  }
 }
 
 /* Adaptive Color System */
+/* Keep orb logo consistently white, but make response panel text adaptive */
+
+/* Orb adaptive styling - logo stays white */
 .kana-orb-container.adaptive-colors .kana-orb {
-  background: var(--kana-adaptive-bg, linear-gradient(135deg, rgba(70, 130, 240, 0.9) 0%, rgba(30, 100, 220, 0.95) 100%));
-  border: 2px solid var(--kana-adaptive-border, rgba(150, 200, 255, 0.3));
-  box-shadow: 
-    var(--kana-adaptive-shadow, 0 15px 35px rgba(70, 130, 240, 0.5)),
-    0 5px 15px rgba(30, 100, 220, 0.4),
-    inset 0 2px 5px rgba(200, 230, 255, 0.4),
-    inset 0 -2px 5px rgba(0, 0, 0, 0.1);
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95));
+  background: var(--kana-adaptive-bg, linear-gradient(135deg, #4A90E2 0%, #357ABD 100%));
+  border: 1px solid var(--kana-adaptive-border, rgba(255, 255, 255, 0.4));
+  box-shadow: var(--kana-adaptive-shadow, 0 6px 15px rgba(74, 144, 226, 0.3));
 }
 
-.kana-orb-container.adaptive-colors .kana-orb:hover {
-  box-shadow: 
-    var(--kana-adaptive-shadow, 0 20px 50px rgba(70, 130, 240, 0.6)),
-    0 8px 25px rgba(30, 100, 220, 0.5),
-    inset 0 3px 8px rgba(200, 230, 255, 0.5),
-    inset 0 -3px 8px rgba(0, 0, 0, 0.15);
+/* IMPORTANT: Keep orb icon/logo consistently white regardless of adaptive colors */
+.kana-orb-container.adaptive-colors .kana-orb-icon {
+  color: rgba(255, 255, 255, 0.95) !important;
 }
 
+/* Panel adaptive styling - text color adapts to background */
 .kana-chat-panel.adaptive-colors {
-  background: var(--kana-adaptive-bg, rgba(40, 50, 70, 0.95));
-  border: 1px solid var(--kana-adaptive-border, rgba(150, 200, 255, 0.3));
-  box-shadow: var(--kana-adaptive-shadow, 0 20px 60px rgba(0, 0, 0, 0.3));
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95));
+  background: var(--kana-adaptive-bg, rgba(26, 35, 126, 0.15));
+  border: 1px solid var(--kana-adaptive-border, rgba(255, 255, 255, 0.3));
+  box-shadow: var(--kana-adaptive-shadow, 0 20px 60px rgba(0, 0, 0, 0.2));
+  backdrop-filter: blur(16px) saturate(1.2) brightness(1.1);
 }
 
-.kana-chat-panel.adaptive-colors .kana-response-content {
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95));
+/* Adaptive text colors for response content with improved contrast */
+.kana-chat-panel.adaptive-colors .kana-response-content,
+.kana-chat-panel.adaptive-colors .kana-ai-response,
+.kana-chat-panel.adaptive-colors p,
+.kana-chat-panel.adaptive-colors h3,
+.kana-chat-panel.adaptive-colors h4,
+.kana-chat-panel.adaptive-colors li {
+  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.9)) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
 }
 
-.kana-chat-panel.adaptive-colors .kana-response-content h3 {
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95));
+/* Make headers more prominent with adaptive colors */
+.kana-chat-panel.adaptive-colors h3,
+.kana-chat-panel.adaptive-colors h4 {
+  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95)) !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
 }
 
-.kana-chat-panel.adaptive-colors .kana-response-content h4 {
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.85));
+/* Enhanced strong text contrast */
+.kana-chat-panel.adaptive-colors strong {
+  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.98)) !important;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
-.kana-chat-panel.adaptive-colors .kana-response-content p,
-.kana-chat-panel.adaptive-colors .kana-response-content li {
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.85));
-}
-
+/* Adaptive input styling */
 .kana-chat-panel.adaptive-colors .kana-chat-input {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--kana-adaptive-border, rgba(150, 200, 255, 0.3));
-  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95));
-}
-
-.kana-chat-panel.adaptive-colors .kana-chat-input:focus {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: var(--kana-adaptive-border, rgba(150, 200, 255, 0.5));
+  background: var(--kana-adaptive-bg, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--kana-adaptive-border, rgba(255, 255, 255, 0.3));
+  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.9));
 }
 
 .kana-chat-panel.adaptive-colors .kana-chat-input::placeholder {
-  color: var(--kana-adaptive-text-subtle, rgba(255, 255, 255, 0.5));
+  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.6));
 }
 
+/* Adaptive button styling */
 .kana-chat-panel.adaptive-colors .kana-send-button {
-  background: var(--kana-adaptive-bg, rgba(70, 130, 240, 0.8));
-  border: 1px solid var(--kana-adaptive-border, rgba(150, 200, 255, 0.3));
+  background: var(--kana-adaptive-bg, rgba(74, 144, 226, 0.8));
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Adaptive header styling */
+.kana-chat-panel.adaptive-colors .kana-panel-header {
+  border-bottom: 1px solid var(--kana-adaptive-border, rgba(255, 255, 255, 0.3));
+}
+
+.kana-chat-panel.adaptive-colors .kana-panel-title {
   color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95));
 }
 
-.kana-chat-panel.adaptive-colors .kana-send-button:hover {
-  background: var(--kana-adaptive-bg, rgba(70, 130, 240, 0.9));
+/* Ensure code blocks and special content maintain readability */
+.kana-chat-panel.adaptive-colors code {
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.95);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Adaptive demo mode styling */
-.kana-chat-panel.adaptive-colors .kana-demo-mode {
-  background: var(--kana-adaptive-bg, rgba(255, 193, 7, 0.1));
-  border: 1px solid var(--kana-adaptive-border, rgba(255, 193, 7, 0.3));
+/* Links in adaptive mode */
+.kana-chat-panel.adaptive-colors a {
+  color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.9)) !important;
+  text-decoration: underline;
+  font-weight: 500;
 }
 
-.kana-chat-panel.adaptive-colors .kana-page-analysis {
-  background: var(--kana-adaptive-bg, rgba(70, 130, 240, 0.1));
-  border: 1px solid var(--kana-adaptive-border, rgba(70, 130, 240, 0.2));
+/* List items with better spacing */
+.kana-chat-panel.adaptive-colors ul li,
+.kana-chat-panel.adaptive-colors ol li {
+  margin-bottom: 6px;
+  line-height: 1.5;
 }
+
+/* Adaptive scrollbar for response content */
+.kana-chat-panel.adaptive-colors .kana-response-content::-webkit-scrollbar-thumb {
+  background: var(--kana-adaptive-border, rgba(255, 255, 255, 0.3));
+}
+
+.kana-chat-panel.adaptive-colors .kana-response-content::-webkit-scrollbar-track {
+  background: var(--kana-adaptive-bg, rgba(0, 0, 0, 0.1));
+}
+
+/* ...existing code... */

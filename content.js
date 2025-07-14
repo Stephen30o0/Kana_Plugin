@@ -3,6 +3,49 @@
 
 console.log('Kana AI Learning Assistant - Content Script Loading...');
 
+// Load external data files using dynamic import (CSP-safe)
+async function loadDataFiles() {
+  try {
+    const glassThemesUrl = chrome.runtime.getURL('data/glass-themes.js');
+    const subjectResourcesUrl = chrome.runtime.getURL('data/subject-resources.js');
+    
+    // Import the modules directly (this is CSP-safe)
+    const [glassThemesModule, subjectResourcesModule] = await Promise.all([
+      import(glassThemesUrl).catch(async (error) => {
+        console.warn('Dynamic import failed, trying fetch approach:', error);
+        const response = await fetch(glassThemesUrl);
+        const text = await response.text();
+        return parseThemeDataSafely(text, 'GLASS_THEMES');
+      }),
+      import(subjectResourcesUrl).catch(async (error) => {
+        console.warn('Dynamic import failed for resources, trying fetch approach:', error);
+        const response = await fetch(subjectResourcesUrl);
+        const text = await response.text();
+        return parseResourceDataSafely(text, 'SUBJECT_RESOURCES');
+      })
+    ]);
+    
+    const glassThemes = glassThemesModule.GLASS_THEMES || glassThemesModule.default?.GLASS_THEMES || {};
+    const subjectResources = subjectResourcesModule.SUBJECT_RESOURCES || subjectResourcesModule.default?.SUBJECT_RESOURCES || {};
+    
+    return { glassThemes, subjectResources };
+  } catch (error) {
+    console.warn('Failed to load external data files, using fallbacks:', error);
+    return { glassThemes: {}, subjectResources: {} };
+  }
+}
+
+// CSP-safe parsing functions (no eval/Function constructor)
+function parseThemeDataSafely(text, exportName) {
+  // This is a simplified fallback - in practice, we'll rely on the import working
+  return { [exportName]: {} };
+}
+
+function parseResourceDataSafely(text, exportName) {
+  // This is a simplified fallback - in practice, we'll rely on the import working  
+  return { [exportName]: {} };
+}
+
 // Conversation context manager for follow-up questions
 class ConversationContext {
   constructor() {
@@ -70,103 +113,23 @@ class ConversationContext {
 
 class KanaAssistant {
   constructor() {
-    console.log('Kana Assistant initializing...');
+    this.log('Initializing...');
     this.orb = null;
     this.chatPanel = null;
     this.isListening = false;
     this.isDragging = false;
     this.isLocked = false;
     this.recognition = null;
-    this.position = { x: 30, y: 50 }; // percentage from right and top
+    this.position = { x: 30, y: 50 };
     this.wakePhrases = ['hey kana', 'hi kana', 'hello kana'];
-    
-    // Conversation context for follow-up questions
     this.conversationContext = new ConversationContext();
+    this.glassThemes = {};
+    this.subjectResources = {};
+    this.dataLoaded = false;
+    this.loadExternalData();
     
-    // Glass theme definitions
-    this.glassThemes = {
-      blue: {
-        panelBg: 'linear-gradient(135deg, rgba(240, 248, 255, 0.3) 0%, rgba(220, 240, 255, 0.25) 50%, rgba(200, 230, 255, 0.3) 100%), linear-gradient(225deg, rgba(100, 160, 255, 0.12) 0%, rgba(70, 130, 240, 0.08) 50%, rgba(50, 110, 220, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(70, 130, 240, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(245, 250, 255, 0.25) 0%, rgba(235, 245, 255, 0.15) 50%, rgba(225, 240, 255, 0.2) 100%), linear-gradient(225deg, rgba(120, 180, 255, 0.15) 0%, rgba(100, 160, 255, 0.08) 50%, rgba(80, 140, 255, 0.1) 100%)',
-        textColor: 'rgba(20, 40, 80, 0.92)',
-        orbBg: '#4A90E2',
-        orbShadow: 'rgba(74, 144, 226, 0.4)'
-      },
-      green: {
-        panelBg: 'linear-gradient(135deg, rgba(240, 255, 248, 0.3) 0%, rgba(220, 255, 240, 0.25) 50%, rgba(200, 255, 230, 0.3) 100%), linear-gradient(225deg, rgba(100, 255, 160, 0.12) 0%, rgba(70, 240, 130, 0.08) 50%, rgba(50, 220, 110, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(70, 240, 130, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(245, 255, 250, 0.25) 0%, rgba(235, 255, 245, 0.15) 50%, rgba(225, 255, 240, 0.2) 100%), linear-gradient(225deg, rgba(120, 255, 180, 0.15) 0%, rgba(100, 255, 160, 0.08) 50%, rgba(80, 255, 140, 0.1) 100%)',
-        textColor: 'rgba(20, 80, 40, 0.92)',
-        orbBg: '#4AE290',
-        orbShadow: 'rgba(74, 226, 144, 0.4)'
-      },
-      purple: {
-        panelBg: 'linear-gradient(135deg, rgba(248, 240, 255, 0.3) 0%, rgba(240, 220, 255, 0.25) 50%, rgba(230, 200, 255, 0.3) 100%), linear-gradient(225deg, rgba(160, 100, 255, 0.12) 0%, rgba(130, 70, 240, 0.08) 50%, rgba(110, 50, 220, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(130, 70, 240, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(250, 245, 255, 0.25) 0%, rgba(245, 235, 255, 0.15) 50%, rgba(240, 225, 255, 0.2) 100%), linear-gradient(225deg, rgba(180, 120, 255, 0.15) 0%, rgba(160, 100, 255, 0.08) 50%, rgba(140, 80, 255, 0.1) 100%)',
-        textColor: 'rgba(80, 20, 80, 0.92)',
-        orbBg: '#9A4AE2',
-        orbShadow: 'rgba(154, 74, 226, 0.4)'
-      },
-      yellow: {
-        panelBg: 'linear-gradient(135deg, rgba(255, 248, 240, 0.3) 0%, rgba(255, 240, 220, 0.25) 50%, rgba(255, 230, 200, 0.3) 100%), linear-gradient(225deg, rgba(255, 200, 100, 0.12) 0%, rgba(240, 180, 70, 0.08) 50%, rgba(220, 160, 50, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(240, 180, 70, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(255, 250, 245, 0.25) 0%, rgba(255, 245, 235, 0.15) 50%, rgba(255, 240, 225, 0.2) 100%), linear-gradient(225deg, rgba(255, 220, 120, 0.15) 0%, rgba(255, 200, 100, 0.08) 50%, rgba(255, 180, 80, 0.1) 100%)',
-        textColor: 'rgba(80, 60, 20, 0.92)',
-        orbBg: '#E2B04A',
-        orbShadow: 'rgba(226, 176, 74, 0.4)'
-      },
-      red: {
-        panelBg: 'linear-gradient(135deg, rgba(255, 240, 240, 0.3) 0%, rgba(255, 220, 220, 0.25) 50%, rgba(255, 200, 200, 0.3) 100%), linear-gradient(225deg, rgba(255, 100, 100, 0.12) 0%, rgba(240, 70, 70, 0.08) 50%, rgba(220, 50, 50, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(240, 70, 70, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(255, 245, 245, 0.25) 0%, rgba(255, 235, 235, 0.15) 50%, rgba(255, 225, 225, 0.2) 100%), linear-gradient(225deg, rgba(255, 120, 120, 0.15) 0%, rgba(255, 100, 100, 0.08) 50%, rgba(255, 80, 80, 0.1) 100%)',
-        textColor: 'rgba(80, 20, 20, 0.92)',
-        orbBg: '#E24A4A',
-        orbShadow: 'rgba(226, 74, 74, 0.4)'
-      },
-      teal: {
-        panelBg: 'linear-gradient(135deg, rgba(240, 255, 255, 0.3) 0%, rgba(220, 255, 255, 0.25) 50%, rgba(200, 255, 255, 0.3) 100%), linear-gradient(225deg, rgba(100, 255, 255, 0.12) 0%, rgba(70, 240, 240, 0.08) 50%, rgba(50, 220, 220, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(70, 240, 240, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(245, 255, 255, 0.25) 0%, rgba(235, 255, 255, 0.15) 50%, rgba(225, 255, 255, 0.2) 100%), linear-gradient(225deg, rgba(120, 255, 255, 0.15) 0%, rgba(100, 255, 255, 0.08) 50%, rgba(80, 255, 255, 0.1) 100%)',
-        textColor: 'rgba(20, 80, 80, 0.92)',
-        orbBg: '#4AE2E2',
-        orbShadow: 'rgba(74, 226, 226, 0.4)'
-      },
-      orange: {
-        panelBg: 'linear-gradient(135deg, rgba(255, 245, 240, 0.3) 0%, rgba(255, 235, 220, 0.25) 50%, rgba(255, 225, 200, 0.3) 100%), linear-gradient(225deg, rgba(255, 150, 100, 0.12) 0%, rgba(240, 130, 70, 0.08) 50%, rgba(220, 110, 50, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(240, 130, 70, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(255, 248, 245, 0.25) 0%, rgba(255, 243, 235, 0.15) 50%, rgba(255, 238, 225, 0.2) 100%), linear-gradient(225deg, rgba(255, 170, 120, 0.15) 0%, rgba(255, 150, 100, 0.08) 50%, rgba(255, 130, 80, 0.1) 100%)',
-        textColor: 'rgba(80, 50, 20, 0.92)',
-        orbBg: '#E2944A',
-        orbShadow: 'rgba(226, 148, 74, 0.4)'
-      },
-      pink: {
-        panelBg: 'linear-gradient(135deg, rgba(255, 240, 248, 0.3) 0%, rgba(255, 220, 240, 0.25) 50%, rgba(255, 200, 230, 0.3) 100%), linear-gradient(225deg, rgba(255, 100, 160, 0.12) 0%, rgba(240, 70, 130, 0.08) 50%, rgba(220, 50, 110, 0.1) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.4)',
-        panelShadow: 'rgba(240, 70, 130, 0.15)',
-        inputBg: 'linear-gradient(135deg, rgba(255, 245, 250, 0.25) 0%, rgba(255, 235, 245, 0.15) 50%, rgba(255, 225, 240, 0.2) 100%), linear-gradient(225deg, rgba(255, 120, 180, 0.15) 0%, rgba(255, 100, 160, 0.08) 50%, rgba(255, 80, 140, 0.1) 100%)',
-        textColor: 'rgba(80, 20, 60, 0.92)',
-        orbBg: '#E24A94',
-        orbShadow: 'rgba(226, 74, 148, 0.4)'
-      },
-      clear: {
-        panelBg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.12) 100%)',
-        panelBorder: 'rgba(255, 255, 255, 0.3)',
-        panelShadow: 'rgba(0, 0, 0, 0.1)',
-        inputBg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.16) 100%)',
-        textColor: 'rgba(40, 40, 40, 0.92)',
-        orbBg: '#ffffff',
-        orbShadow: 'rgba(0, 0, 0, 0.2)'
-      }
-    };
+    // Track last successful AI model for faster responses
+    this.lastSuccessfulModel = null;
     
     // Default glass settings
     this.glassSettings = {
@@ -179,51 +142,199 @@ class KanaAssistant {
       depth: 60
     };
     
+    // Initialize modular components
+    this.initializeModules();
+    
     this.init();
   }
 
-  async loadGlassSettings() {
+  initializeModules() {
     try {
-      const settings = await chrome.storage.local.get([
-        'glassColorPanel', 'glassColorOrb', 'glassOpacity', 
-        'glassBlur', 'glassSaturation', 'glassBrightness', 'glassDepth'
-      ]);
-      
-      this.glassSettings = {
-        panelColor: settings.glassColorPanel || 'blue',
-        orbColor: settings.glassColorOrb || 'blue',
-        opacity: settings.glassOpacity || 80,
-        blur: settings.glassBlur || 30,
-        saturation: settings.glassSaturation || 140,
-        brightness: settings.glassBrightness || 105,
-        depth: settings.glassDepth || 60
-      };
-      
-      this.applyGlassTheme();
+      // Initialize Error Handler
+      if (window.ErrorHandler) {
+        this.errorHandler = new ErrorHandler();
+        this.log('Error Handler initialized successfully');
+      } else {
+        this.log('Error Handler not available', 'warn');
+      }
+
+      // Initialize URL Validator
+      if (window.URLValidator) {
+        this.urlValidator = new URLValidator();
+        this.log('URL Validator initialized successfully');
+      } else {
+        this.log('URL Validator not available', 'warn');
+      }
+
+      // Initialize Demo Response Generator
+      if (window.DemoResponseGenerator) {
+        this.demoResponseGenerator = new DemoResponseGenerator();
+        this.log('Demo Response Generator initialized successfully');
+      } else {
+        this.log('Demo Response Generator not available', 'warn');
+      }
+
+      // Initialize YouTube PiP Manager
+      if (window.YouTubePiPManager) {
+        this.youtubePiP = new YouTubePiPManager();
+        // Set initial theme if available
+        if (this.glassThemes && this.glassSettings) {
+          this.youtubePiP.updateTheme(this.glassSettings.panelColor, this.glassThemes, this.glassSettings);
+        }
+        this.log('YouTube PiP Manager initialized successfully');
+      } else {
+        this.log('YouTube PiP Manager not available', 'warn');
+      }
+
+      // Initialize Real YouTube Video Finder (static database)
+      if (window.RealYouTubeVideoFinder) {
+        this.realYouTubeFinder = new RealYouTubeVideoFinder();
+        this.log('Real YouTube Video Finder initialized successfully');
+      } else {
+        this.log('Real YouTube Video Finder not available', 'warn');
+      }
+
+      // Initialize Live YouTube Searcher (real API search)
+      if (window.LiveYouTubeSearcher) {
+        // Get YouTube API key from storage or use fallback
+        this.initializeLiveYouTubeSearch();
+      } else {
+        this.log('Live YouTube Searcher not available', 'warn');
+      }
+
+      // Initialize Study Pouch Manager
+      if (window.StudyPouchManager) {
+        this.studyPouch = new StudyPouchManager();
+        this.log('Study Pouch Manager initialized successfully');
+        console.log('StudyPouchManager instance:', this.studyPouch);
+        
+        // Apply theme immediately if available
+        setTimeout(() => {
+          if (this.glassSettings && this.glassThemes) {
+            console.log('Applying initial theme to Study Pouch:', this.glassSettings.orbColor);
+            this.studyPouch.updateTheme(this.glassSettings.orbColor);
+          }
+        }, 100);
+      } else {
+        this.log('Study Pouch Manager not available', 'warn');
+        console.error('window.StudyPouchManager is undefined!');
+      }
     } catch (error) {
-      console.error('Error loading glass settings:', error);
+      this.log(`Failed to initialize modules: ${error.message}`, 'error');
     }
   }
 
+  async initializeLiveYouTubeSearch() {
+    try {
+      // Get stored YouTube API key
+      const result = await chrome.storage.local.get(['youtubeApiKey']);
+      const apiKey = result.youtubeApiKey;
+      
+      this.liveYouTubeSearcher = new LiveYouTubeSearcher(apiKey);
+      
+      if (apiKey) {
+        this.log('Live YouTube Searcher initialized with API key - REAL search enabled');
+      } else {
+        this.log('Live YouTube Searcher initialized without API key - using public APIs only');
+      }
+    } catch (error) {
+      this.log(`Failed to initialize Live YouTube Searcher: ${error.message}`, 'error');
+      // Fallback without API key
+      this.liveYouTubeSearcher = new LiveYouTubeSearcher();
+    }
+  }
+
+  async loadExternalData() {
+    try {
+      const data = await loadDataFiles();
+      this.glassThemes = data.glassThemes;
+      this.subjectResources = data.subjectResources;
+      
+      // Make themes globally available for Study Pouch
+      window.glassThemes = this.glassThemes;
+      
+      // Validate that glass themes were loaded correctly
+      if (!this.glassThemes || Object.keys(this.glassThemes).length === 0) {
+        this.glassThemes = this.getBuiltInGlassThemes();
+        window.glassThemes = this.glassThemes;
+      }
+      
+      this.dataLoaded = true;
+      
+      // Apply glass theme after data is loaded
+      if (this.orb && this.chatPanel) {
+        this.applyGlassTheme();
+      }
+    } catch (error) {
+      console.warn('Failed to load external data:', error);
+      this.glassThemes = this.getBuiltInGlassThemes();
+      window.glassThemes = this.glassThemes;
+      this.subjectResources = {};
+      this.dataLoaded = true; // Set to true so theme can still be applied
+    }
+  }
+
+  getBuiltInGlassThemes() {
+    // Minimal fallback theme - full themes are loaded from data/glass-themes.js
+    return {
+      blue: {
+        panelBg: 'linear-gradient(135deg, rgba(240, 248, 255, 0.3) 0%, rgba(220, 240, 255, 0.25) 50%, rgba(200, 230, 255, 0.3) 100%)',
+        panelBorder: 'rgba(255, 255, 255, 0.4)',
+        panelShadow: 'rgba(70, 130, 240, 0.15)',
+        inputBg: 'linear-gradient(135deg, rgba(245, 250, 255, 0.25) 0%, rgba(235, 245, 255, 0.15) 50%, rgba(225, 240, 255, 0.2) 100%)',
+        textColor: 'rgba(20, 40, 80, 0.92)',
+        orbBg: '#4A90E2',
+        orbShadow: 'rgba(74, 144, 226, 0.4)'
+      }
+    };
+  }
+
+  // Helper function to create DOM elements with properties
+  createElement(tag, props = {}, styles = {}) {
+    const el = document.createElement(tag);
+    Object.assign(el, props);
+    Object.assign(el.style, styles);
+    return el;
+  }
+
+  // Helper for adding multiple event listeners
+  addEvents(element, events) {
+    Object.entries(events).forEach(([event, handler]) => {
+      element.addEventListener(event, handler);
+    });
+  }
+
+  // Console wrapper for shorter calls
+  log(msg, level = 'log') { console[level](`Kana: ${msg}`); }
+
   init() {
-    console.log('Kana Assistant creating orb...');
+    this.log('Creating orb...');
     try {
       this.createOrb();
       this.setupEventListeners();
-      this.setupSpeechRecognition();
+      // Disabled built-in speech recognition to avoid conflict with enhanced voice system
+      // this.setupSpeechRecognition();
+      this.setupEnhancedVoice();
       this.loadPosition();
       this.setupMessageListener();
-      
-      // Load glass settings and apply them
       this.loadGlassSettings();
-      
-      // Enable adaptive colors by default
-      this.useAdaptiveColors = true;
-      this.applyAdaptiveColors();
-      
-      console.log('Kana Assistant initialized successfully!');
+      this.loadAdaptiveColorsSetting();
+      this.log('Initialized successfully!');
     } catch (error) {
-      console.error('Kana Assistant initialization failed:', error);
+      this.log('Initialization failed', 'error');
+    }
+  }
+
+  async loadAdaptiveColorsSetting() {
+    try {
+      const settings = await chrome.storage.local.get(['kanaAdaptiveColors']);
+      this.useAdaptiveColors = settings.kanaAdaptiveColors !== undefined ? settings.kanaAdaptiveColors : true; // Default to true
+      this.useAdaptiveColors ? this.applyAdaptiveColors() : this.applyDefaultColors();
+      this.log(`Adaptive colors ${this.useAdaptiveColors ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      this.log('Error loading adaptive colors setting:', error);
+      this.useAdaptiveColors = true; // Default to true
+      this.applyAdaptiveColors();
     }
   }
 
@@ -244,20 +355,37 @@ class KanaAssistant {
         depth: settings.glassDepth || 60
       };
       
-      this.applyGlassTheme();
+      // Wait for external data to be loaded before applying theme
+      if (this.dataLoaded) {
+        this.applyGlassTheme();
+      } else {
+        // Wait for data to load, then apply theme
+        const checkData = () => {
+          if (this.dataLoaded) {
+            this.applyGlassTheme();
+          } else {
+            setTimeout(checkData, 100);
+          }
+        };
+        checkData();
+      }
     } catch (error) {
       console.error('Error loading glass settings:', error);
-      this.applyGlassTheme(); // Apply defaults
     }
   }
 
   applyGlassTheme() {
-    if (!this.chatPanel || !this.orb) return;
+    if (!this.chatPanel || !this.orb || !this.dataLoaded || !this.glassThemes) {
+      return;
+    }
     
     const panelTheme = this.glassThemes[this.glassSettings.panelColor];
     const orbTheme = this.glassThemes[this.glassSettings.orbColor];
     
-    if (!panelTheme || !orbTheme) return;
+    if (!panelTheme || !orbTheme) {
+      console.warn('Glass theme not found for colors:', this.glassSettings.panelColor, this.glassSettings.orbColor);
+      return;
+    }
     
     // Apply panel theme with custom settings
     const opacityMultiplier = this.glassSettings.opacity / 100;
@@ -314,147 +442,169 @@ class KanaAssistant {
     `;
     this.orb.style.backdropFilter = `blur(${2 * blur / 30}px) saturate(${saturation}) brightness(${brightness})`;
     this.orb.style.border = `1px solid rgba(255, 255, 255, ${0.4 * opacityMultiplier})`;
+    
+    // Update YouTube PiP Manager theme if available
+    if (this.youtubePiP && typeof this.youtubePiP.updateTheme === 'function') {
+      this.youtubePiP.updateTheme(this.glassSettings.panelColor, this.glassThemes, this.glassSettings);
+    }
+
+    // Update Study Pouch theme to match the orb color
+    if (this.studyPouch && typeof this.studyPouch.updateTheme === 'function') {
+      console.log('🎨 Syncing Study Pouch theme in applyGlassTheme to:', this.glassSettings.orbColor);
+      this.studyPouch.updateTheme(this.glassSettings.orbColor);
+    }
   }
 
   createOrb() {
-    console.log('Creating orb elements...');
     try {
       // Create main container
-      this.orbContainer = document.createElement('div');
-      this.orbContainer.className = 'kana-orb-container';
-      this.orbContainer.setAttribute('role', 'button');
-      this.orbContainer.setAttribute('aria-label', 'Kana AI Learning Assistant');
-      this.orbContainer.setAttribute('tabindex', '0');
-      console.log('Orb container created');
+      this.orbContainer = this.createElement('div', {
+        className: 'kana-orb-container',
+        role: 'button',
+        'aria-label': 'Kana AI Learning Assistant',
+        tabindex: '0'
+      });
 
-      // Create the orb
-      this.orb = document.createElement('div');
-      this.orb.className = 'kana-orb';
-      
-      // Create orb icon
-      const orbIcon = document.createElement('div');
-      orbIcon.className = 'kana-orb-icon';
-      // Create brain SVG icon
-      orbIcon.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px;">
+      // Create the orb with icon, voice indicator, and lock icon
+      this.orb = this.createElement('div', { className: 'kana-orb' });
+      const orbIcon = this.createElement('div', {
+        className: 'kana-orb-icon',
+        innerHTML: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px;">
           <path d="M12 2a3 3 0 0 0-3 3 3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0 3-3V8a3 3 0 0 0-3-3 3 3 0 0 0-3-3z"/>
           <path d="M12 12a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-          <path d="M9 18h6"/>
-          <path d="M10 22h4"/>
-        </svg>
-      `;
-      this.orb.appendChild(orbIcon);
+          <path d="M9 18h6"/><path d="M10 22h4"/>
+        </svg>`
+      });
 
-      // Create voice indicator
-      const voiceIndicator = document.createElement('div');
-      voiceIndicator.className = 'kana-voice-indicator';
-      this.orb.appendChild(voiceIndicator);
+      // Create Study Pouch toggle button
+      this.studyPouchButton = this.createElement('div', {
+        className: 'kana-study-pouch-toggle',
+        title: 'Open Study Pouch',
+        innerHTML: '🎒'
+      });
+      console.log('Study Pouch button created:', this.studyPouchButton);
 
-      // Create lock icon
-      const lockIcon = document.createElement('div');
-      lockIcon.className = 'kana-lock-icon';
-      lockIcon.innerHTML = '🔒';
-      this.orb.appendChild(lockIcon);
-
+      this.orb.append(orbIcon, 
+        this.createElement('div', { className: 'kana-voice-indicator' }),
+        this.createElement('div', { className: 'kana-lock-icon', innerHTML: '🔒' }),
+        this.studyPouchButton
+      );
+      console.log('Study Pouch button appended to orb');
       this.orbContainer.appendChild(this.orb);
-      console.log('Orb element created');
 
-      // Create chat panel (will also show responses)
-      this.chatPanel = document.createElement('div');
-      this.chatPanel.className = 'kana-chat-panel';
-      
-      // Create response content area (initially hidden)
-      const chatResponseContent = document.createElement('div');
-      chatResponseContent.className = 'kana-response-content';
-      chatResponseContent.style.display = 'none';
+      // Create chat panel components
+      this.chatPanel = this.createElement('div', { className: 'kana-chat-panel' });
+      const chatResponseContent = this.createElement('div', { 
+        className: 'kana-response-content' 
+      }, { display: 'none' });
       this.chatPanel.appendChild(chatResponseContent);
       
-      const chatInput = document.createElement('textarea');
-      chatInput.className = 'kana-chat-input';
-      chatInput.placeholder = 'Ask Kana about what you\'re learning...';
-      chatInput.rows = 2;
+      const chatInput = this.createElement('textarea', {
+        className: 'kana-chat-input',
+        placeholder: 'Ask Kana about what you\'re learning...',
+        rows: 2
+      });
       
-      // Create input container to hold both textarea and send button
-      const inputContainer = document.createElement('div');
-      inputContainer.className = 'kana-input-container';
+      const inputContainer = this.createElement('div', { className: 'kana-input-container' });
+      const sendButton = this.createElement('button', {
+        className: 'kana-send-button',
+        'aria-label': 'Send message',
+        innerHTML: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;">
+          <path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/>
+        </svg>`
+      });
       
-      const sendButton = document.createElement('button');
-      sendButton.className = 'kana-send-button';
-      // Create paper plane send icon
-      sendButton.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;">
-          <path d="M22 2 11 13"/>
-          <path d="M22 2 15 22 11 13 2 9z"/>
-        </svg>
-      `;
-      sendButton.setAttribute('aria-label', 'Send message');
-      
-      inputContainer.appendChild(chatInput);
-      inputContainer.appendChild(sendButton);
-      
+      inputContainer.append(chatInput, sendButton);
       this.chatPanel.appendChild(inputContainer);
-      
-      console.log('Chat panel created');
 
-      // Add orb to page
-      document.body.appendChild(this.orbContainer);
-      console.log('Orb added to page');
-      
-      // Add chat panel to page (separate from orb container)
-      document.body.appendChild(this.chatPanel);
-      console.log('Chat panel added to page');
-      
-      // Set initial position
+      // Add elements to page and set position
+      document.body.append(this.orbContainer, this.chatPanel);
+      console.log('Orb container added to DOM:', this.orbContainer);
+      console.log('Orb container styles:', window.getComputedStyle(this.orbContainer));
       this.setPosition();
-      console.log('Orb positioned');
+      console.log('Orb position set:', this.position);
+      
+      // Apply theme after elements are created
+      if (this.dataLoaded) {
+        this.applyGlassTheme();
+      }
     } catch (error) {
-      console.error('Error creating orb:', error);
+      this.log('Error creating orb', 'error');
     }
   }
 
   setupEventListeners() {
-    // Orb click for chat
-    this.orb.addEventListener('click', (e) => {
-      if (!this.isDragging) {
-        this.toggleChat();
-      }
-    });
-
-    // Double click to lock/unlock
-    this.orb.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      this.toggleLock();
-    });
-
-    // Drag functionality
-    this.orb.addEventListener('mousedown', this.startDrag.bind(this));
-    document.addEventListener('mousemove', this.drag.bind(this));
-    document.addEventListener('mouseup', this.stopDrag.bind(this));
-
-    // Touch events for mobile
-    this.orb.addEventListener('touchstart', this.startDrag.bind(this));
-    document.addEventListener('touchmove', this.drag.bind(this));
-    document.addEventListener('touchend', this.stopDrag.bind(this));
-
-    // Chat input events
     const chatInput = this.chatPanel.querySelector('.kana-chat-input');
     const sendButton = this.chatPanel.querySelector('.kana-send-button');
     
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    // Orb events
+    this.addEvents(this.orb, {
+      click: (e) => {
+        // Don't trigger if clicking on Study Pouch button
+        if (e.target.classList.contains('kana-study-pouch-toggle')) {
+          console.log('Click on Study Pouch button, ignoring orb click');
+          return;
+        }
+        !this.isDragging && this.toggleChat();
+      },
+      dblclick: (e) => { e.preventDefault(); this.toggleLock(); },
+      mousedown: this.startDrag.bind(this),
+      touchstart: this.startDrag.bind(this)
+    });
+
+    // Study Pouch button event
+    console.log('Setting up Study Pouch button event listener...');
+    console.log('Study Pouch button element:', this.studyPouchButton);
+    
+    if (this.studyPouchButton) {
+      console.log('Adding click event listener to Study Pouch button');
+      this.studyPouchButton.addEventListener('click', (e) => {
+        console.log('Study Pouch button clicked!');
         e.preventDefault();
         e.stopPropagation();
-        this.sendChatMessage();
-      }
-      // Prevent space from closing the panel
-      if (e.key === ' ') {
+        e.stopImmediatePropagation();
+        console.log('Event propagation stopped');
+        
+        if (this.studyPouch) {
+          console.log('Study Pouch manager found, toggling...');
+          this.studyPouch.toggle();
+        } else {
+          console.error('Study Pouch manager not initialized!');
+        }
+      });
+      
+      // Also add mousedown to catch the event earlier
+      this.studyPouchButton.addEventListener('mousedown', (e) => {
+        console.log('Study Pouch button mousedown!');
+        e.preventDefault();
         e.stopPropagation();
-      }
+        e.stopImmediatePropagation();
+      });
+      
+      console.log('Study Pouch button event listener added successfully');
+    } else {
+      console.error('Study Pouch button not found!');
+    }
+
+    // Document drag events
+    this.addEvents(document, {
+      mousemove: this.drag.bind(this),
+      mouseup: this.stopDrag.bind(this),
+      touchmove: this.drag.bind(this),
+      touchend: this.stopDrag.bind(this)
     });
-    
-    // Prevent keydown events from bubbling up
-    chatInput.addEventListener('keyup', (e) => {
-      e.stopPropagation();
+
+    // Chat input events
+    this.addEvents(chatInput, {
+      keydown: (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.sendChatMessage();
+        }
+        if (e.key === ' ') e.stopPropagation(); // Prevent space from closing panel
+      },
+      keyup: (e) => e.stopPropagation()
     });
     
     sendButton.addEventListener('click', (e) => {
@@ -463,54 +613,46 @@ class KanaAssistant {
       this.sendChatMessage();
     });
     
-    // Prevent chat panel from closing when clicking inside it
-    this.chatPanel.addEventListener('click', (e) => {
-      e.stopPropagation();
+    // Panel click handling
+    this.addEvents(this.chatPanel, {
+      click: (e) => e.stopPropagation()
     });
 
-    // Click outside to close panels (but not when clicking in chat)
+    // Click outside to close panels
     document.addEventListener('click', (e) => {
       if (!this.orbContainer.contains(e.target) && !this.chatPanel.contains(e.target)) {
         this.hidePanels();
       }
     });
-    
-    // Prevent chat panel from closing when clicking inside it
-    this.chatPanel.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
 
     // Keyboard accessibility and global shortcuts
     document.addEventListener('keydown', (e) => {
-      // Close panels on Escape
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape') this.hidePanels();
+      if (e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !this.chatPanel.contains(e.target)) {
         this.hidePanels();
-      }
-      // Don't close on space unless it's not in an input
-      if (e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-        // Only close if not typing in chat
-        if (!this.chatPanel.contains(e.target)) {
-          this.hidePanels();
-        }
       }
     });
 
-    // Reposition panel when window is resized
-    window.addEventListener('resize', () => {
-      if (this.chatPanel && this.chatPanel.classList.contains('visible')) {
-        this.positionPanel(this.chatPanel);
-      }
-    });
-    
-    // Reposition panel when page is scrolled
-    window.addEventListener('scroll', () => {
-      if (this.chatPanel && this.chatPanel.classList.contains('visible')) {
-        this.positionPanel(this.chatPanel);
-      }
+    // Window events
+    this.addEvents(window, {
+      resize: () => this.chatPanel?.classList.contains('visible') && this.positionPanel(this.chatPanel),
+      scroll: () => this.chatPanel?.classList.contains('visible') && this.positionPanel(this.chatPanel)
     });
   }
 
   setupSpeechRecognition() {
+    console.log('🎙️ Setting up speech recognition...');
+    
+    // Check microphone permissions first
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'microphone' }).then((result) => {
+        console.log('🎙️ Microphone permission status:', result.state);
+        if (result.state === 'denied') {
+          console.warn('🎙️ Microphone permission is denied');
+        }
+      });
+    }
+    
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       this.recognition = new SpeechRecognition();
@@ -519,17 +661,36 @@ class KanaAssistant {
       this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
       
+      console.log('🎙️ Wake phrases configured:', this.wakePhrases);
+      
       this.recognition.onresult = this.handleSpeechResult.bind(this);
+      
+      // Add interim results logging for debugging
+      this.recognition.addEventListener('result', (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          const transcript = result[0].transcript;
+          
+          if (result.isFinal) {
+            console.log('🎙️ Final transcript:', transcript);
+          } else {
+            console.log('🎙️ Interim transcript:', transcript);
+          }
+        }
+      });
+      this.recognition.onstart = () => {
+        console.log('🎙️ Speech recognition started (onstart event)');
+      };
       this.recognition.onend = () => {
+        console.log('🎙️ Speech recognition ended (onend event)');
         if (this.isListening) {
-          // Wait a moment before restarting to avoid rapid retries
           setTimeout(() => {
             if (this.isListening) {
-              console.log('Restarting speech recognition...');
               try {
+                console.log('🎙️ Restarting speech recognition...');
                 this.recognition.start();
               } catch (error) {
-                console.warn('Failed to restart recognition:', error);
+                console.warn('🎙️ Failed to restart recognition:', error);
               }
             }
           }, 1000);
@@ -537,31 +698,36 @@ class KanaAssistant {
       };
       
       this.recognition.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
-        
-        // Handle different error types more gracefully
+        // Only log non-routine errors to reduce console noise
         switch (event.error) {
           case 'aborted':
-            // This is usually from stopping/restarting recognition - don't log as error
-            console.log('Speech recognition was stopped/restarted');
+            // Don't log aborted errors as they're normal during restarts
             break;
           case 'no-speech':
           case 'audio-capture':
-            console.log('Recoverable speech error, continuing to listen...');
+            // Don't log these common errors
             break;
           case 'not-allowed':
-            console.warn('Microphone access denied by user');
+            console.warn('🎙️ Microphone access denied. Please enable microphone permissions.');
             this.stopListening();
+            // Show user-friendly error
+            this.showChatPanel();
+            const responseContent = this.chatPanel.querySelector('.kana-response-content');
+            responseContent.style.display = 'block';
+            responseContent.innerHTML = `
+              <h3>🎙️ Microphone Access Required</h3>
+              <p>Please allow microphone access for voice commands to work.</p>
+              <p>Look for the microphone icon in your browser's address bar and click "Allow".</p>
+            `;
             break;
           case 'network':
-            console.warn('Network error in speech recognition');
+            console.warn('🎙️ Network error in speech recognition, retrying...');
             this.stopListening();
             setTimeout(() => this.startListening(), 3000);
             break;
           default:
             console.error('Speech recognition error:', event.error);
             this.stopListening();
-            // Try to restart after a delay for other errors
             setTimeout(() => this.startListening(), 5000);
         }
       };
@@ -574,9 +740,18 @@ class KanaAssistant {
 
   startListening() {
     if (this.recognition && !this.isListening) {
+      console.log('🎙️ Starting speech recognition...');
       this.isListening = true;
-      this.recognition.start();
-      this.updateOrbState('listening');
+      try {
+        this.recognition.start();
+        this.updateOrbState('listening');
+        console.log('🎙️ Speech recognition started successfully');
+      } catch (error) {
+        console.error('🎙️ Failed to start speech recognition:', error);
+        this.isListening = false;
+      }
+    } else {
+      console.log('🎙️ Speech recognition not available or already listening');
     }
   }
 
@@ -594,15 +769,16 @@ class KanaAssistant {
     
     if (lastResult.isFinal) {
       const transcript = lastResult[0].transcript.toLowerCase().trim();
-      console.log('Speech recognized:', transcript);
+      console.log('🎙️ Speech recognized:', transcript);
       
       // Check for wake phrase
       const hasWakePhrase = this.wakePhrases.some(phrase => 
         transcript.includes(phrase)
       );
       
+      console.log('🎙️ Wake phrase detected:', hasWakePhrase);
+      
       if (hasWakePhrase) {
-        console.log('Wake phrase detected!');
         // Visual feedback - pulse the orb
         this.orb.classList.add('wake-triggered');
         setTimeout(() => {
@@ -615,22 +791,15 @@ class KanaAssistant {
           question = question.replace(phrase, '').trim();
         });
         
-        console.log('Command after wake phrase:', question);
-        
         if (question.length > 0) {
-          // Audio feedback - subtle chime
           this.playAudioFeedback('wake');
           
-          // Show the chat panel and update its content
           if (!this.chatPanel.classList.contains('visible')) {
             this.showChatPanel();
           }
           
-          // Process the voice command
           this.processVoiceCommand(question);
         } else {
-          // Just wake up without a command
-          console.log('Wake phrase with no command, waiting for input');
           this.playAudioFeedback('wake-short');
           this.showChatPanel();
           
@@ -671,7 +840,7 @@ class KanaAssistant {
           oscillator.type = 'sine';
           oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
           oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2);
-          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+          gain
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
           oscillator.start();
           oscillator.stop(audioContext.currentTime + 0.3);
@@ -713,8 +882,534 @@ class KanaAssistant {
     }
   }
 
+  setupEnhancedVoice() {
+    try {
+      // Make kanaAssistant globally available for voice enhancement
+      window.kanaAI = this;
+      
+      // Initialize enhanced voice recognition if available
+      if (window.KanaVoiceRecognition) {
+        console.log('🎤 Initializing Enhanced Voice Recognition with Push-to-Talk...');
+        
+        // Create enhanced voice recognition instance with push-to-talk mode
+        this.enhancedVoice = new window.KanaVoiceRecognition();
+        this.enhancedVoice.setPushToTalkMode(true);
+        
+        // Set up callbacks for voice recognition
+        this.enhancedVoice.onFinalTranscript = (transcript, confidence) => {
+          console.log('🎤 Voice transcript received:', transcript);
+          
+          // Apply transcript corrections for technical terms
+          const correctedTranscript = this.correctTechnicalTerms(transcript);
+          if (correctedTranscript !== transcript) {
+            console.log('🎤 Transcript corrected:', transcript, '->', correctedTranscript);
+          }
+          
+          this.handleVoiceCommand(correctedTranscript);
+        };
+        
+        this.enhancedVoice.onError = (error) => {
+          console.error('🎤 Voice recognition error:', error);
+          this.updateOrbState('idle');
+        };
+        
+        this.enhancedVoice.onStatusChange = (status) => {
+          console.log('🎤 Voice status changed:', status);
+          if (status === 'listening') {
+            this.updateOrbState('listening');
+          } else if (status === 'stopped') {
+            this.updateOrbState('idle');
+          }
+        };
+        
+        // Set up push-to-talk hotkey (Ctrl + Space)
+        this.setupPushToTalkHotkey();
+        
+        console.log('✅ Push-to-Talk Voice Recognition initialized (Ctrl + Space)');
+      } else {
+        console.log('📢 Enhanced Voice Recognition not available, using basic speech recognition');
+      }
+      
+      // Initialize voice integration if available
+      if (window.KanaVoiceIntegration) {
+        console.log('🔗 Initializing Voice Integration...');
+        this.voiceIntegration = new window.KanaVoiceIntegration();
+      }
+      
+    } catch (error) {
+      console.error('Error setting up enhanced voice:', error);
+      // Don't fallback to continuous listening
+      console.log('🎤 Voice recognition disabled. Use Ctrl + Space when ready.');
+    }
+  }
+
+  setupPushToTalkHotkey() {
+    this.isRecording = false;
+    
+    document.addEventListener('keydown', (event) => {
+      // Check if Ctrl + Space is pressed
+      if (event.ctrlKey && event.code === 'Space' && !this.isRecording) {
+        event.preventDefault();
+        this.startVoiceRecording();
+      }
+    });
+    
+    document.addEventListener('keyup', (event) => {
+      // Check if Ctrl or Space is released
+      if ((event.ctrlKey === false || event.code === 'Space') && this.isRecording) {
+        event.preventDefault();
+        this.stopVoiceRecording();
+      }
+    });
+    
+    console.log('🎤 Push-to-Talk hotkey setup complete (Ctrl + Space)');
+    
+    // Show initial instruction
+    setTimeout(() => {
+      this.showVoiceInstructions();
+    }, 2000);
+  }
+
+  showVoiceInstructions() {
+    // Create instruction panel
+    const instructions = document.createElement('div');
+    instructions.id = 'kana-voice-instructions';
+    instructions.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #2196F3, #42A5F5);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 2147483647;
+      box-shadow: 0 4px 20px rgba(33, 150, 243, 0.4);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      text-align: center;
+      opacity: 0;
+      transform: translateX(-50%) translateY(-20px);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    `;
+    instructions.innerHTML = `
+      <div style="margin-bottom: 8px; font-weight: 600;">🎤 Voice Control Ready!</div>
+      <div>Hold <strong>Ctrl + Space</strong> to record voice commands</div>
+      <div style="margin-top: 8px; font-size: 12px; opacity: 0.9;">Click to dismiss</div>
+    `;
+    
+    instructions.addEventListener('click', () => {
+      instructions.style.opacity = '0';
+      instructions.style.transform = 'translateX(-50%) translateY(-20px)';
+      setTimeout(() => {
+        if (instructions.parentNode) {
+          instructions.parentNode.removeChild(instructions);
+        }
+      }, 300);
+    });
+    
+    document.body.appendChild(instructions);
+    
+    // Animate in
+    setTimeout(() => {
+      instructions.style.opacity = '1';
+      instructions.style.transform = 'translateX(-50%) translateY(0)';
+    }, 100);
+    
+    // Auto-hide after 8 seconds
+    setTimeout(() => {
+      if (instructions.parentNode) {
+        instructions.style.opacity = '0';
+        instructions.style.transform = 'translateX(-50%) translateY(-20px)';
+        setTimeout(() => {
+          if (instructions.parentNode) {
+            instructions.parentNode.removeChild(instructions);
+          }
+        }, 300);
+      }
+    }, 8000);
+  }
+
+  async startVoiceRecording() {
+    if (this.isRecording || !this.enhancedVoice) return;
+    
+    try {
+      this.isRecording = true;
+      console.log('🎤 Starting voice recording...');
+      await this.enhancedVoice.startListening();
+      
+      // Visual feedback
+      this.showPushToTalkIndicator();
+    } catch (error) {
+      console.error('❌ Failed to start voice recording:', error);
+      this.isRecording = false;
+      this.updateOrbState('idle');
+    }
+  }
+
+  async stopVoiceRecording() {
+    if (!this.isRecording || !this.enhancedVoice) return;
+    
+    try {
+      this.isRecording = false;
+      console.log('🎤 Stopping voice recording...');
+      await this.enhancedVoice.stopListening();
+      
+      // Hide visual feedback
+      this.hidePushToTalkIndicator();
+    } catch (error) {
+      console.error('❌ Failed to stop voice recording:', error);
+    }
+  }
+
+  showPushToTalkIndicator() {
+    // Create or show recording indicator
+    let indicator = document.getElementById('kana-recording-indicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'kana-recording-indicator';
+      indicator.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #ff4444, #ff6666);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 25px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 2147483647;
+        box-shadow: 0 4px 20px rgba(255, 68, 68, 0.4);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: pulse 1.5s ease-in-out infinite alternate;
+      `;
+      indicator.innerHTML = `
+        <div style="width: 8px; height: 8px; background: white; border-radius: 50%; animation: blink 1s ease-in-out infinite;"></div>
+        Recording... (Release Ctrl+Space to stop)
+      `;
+      
+      // Add CSS animations
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes pulse {
+          0% { box-shadow: 0 4px 20px rgba(255, 68, 68, 0.4); }
+          100% { box-shadow: 0 4px 30px rgba(255, 68, 68, 0.8); }
+        }
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0.3; }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(indicator);
+    }
+    indicator.style.display = 'flex';
+  }
+
+  hidePushToTalkIndicator() {
+    const indicator = document.getElementById('kana-recording-indicator');
+    if (indicator) {
+      indicator.style.display = 'none';
+    }
+  }
+
+  // Correct common voice transcription errors for technical terms
+  correctTechnicalTerms(transcript) {
+    if (!transcript) return transcript;
+    
+    let corrected = transcript;
+    
+    // Technical term corrections
+    const corrections = {
+      // VR/3D Terms
+      '3d wife': '3DOF',
+      '3 d wife': '3DOF',
+      'three d wife': '3DOF',
+      'three dof': '3DOF',
+      '6 dof': '6DOF',
+      'six dof': '6DOF',
+      'vr headset': 'VR headset',
+      'ar headset': 'AR headset',
+      
+      // Unity Terms
+      'game object': 'GameObject',
+      'game objects': 'GameObjects',
+      'ray casting': 'raycasting',
+      'ray cast': 'raycast',
+      'prefab': 'Prefab',
+      'prefabs': 'Prefabs',
+      'mono behavior': 'MonoBehaviour',
+      'mono behaviour': 'MonoBehaviour',
+      'transform component': 'Transform component',
+      'rigid body': 'Rigidbody',
+      
+      // Programming Terms
+      'object oriented': 'object-oriented',
+      'oop': 'OOP',
+      'api': 'API',
+      'json': 'JSON',
+      'xml': 'XML',
+      'html': 'HTML',
+      'css': 'CSS',
+      'javascript': 'JavaScript',
+      'c sharp': 'C#',
+      'c plus plus': 'C++',
+      
+      // Common Misheard Words
+      'can i have': 'can you help with',
+      'i need you to explain': 'explain',
+      'what do you mean by': 'what is',
+      'i don\'t understand': 'explain'
+    };
+    
+    // Apply corrections (case-insensitive)
+    for (const [wrong, right] of Object.entries(corrections)) {
+      const regex = new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      corrected = corrected.replace(regex, right);
+    }
+    
+    // Clean up extra spaces and punctuation
+    corrected = corrected.replace(/\s+/g, ' ').trim();
+    
+    return corrected;
+  }
+
+  // Correct common speech recognition errors for technical terms (all domains)
+  correctTechnicalTerms(transcript) {
+    let corrected = transcript;
+    
+    // Comprehensive technical term corrections across all domains
+    const corrections = {
+      // Programming Languages
+      'c sharp': 'C#',
+      'see sharp': 'C#',
+      'java script': 'JavaScript',
+      'java scripts': 'JavaScript',
+      'type script': 'TypeScript',
+      'python three': 'Python 3',
+      'c plus plus': 'C++',
+      'see plus plus': 'C++',
+      
+      // Web Development
+      'html five': 'HTML5',
+      'css three': 'CSS3',
+      'react jay s': 'React.js',
+      'angular jay s': 'Angular.js',
+      'node jay s': 'Node.js',
+      'rest api': 'REST API',
+      'api': 'API',
+      'json': 'JSON',
+      'ajax': 'AJAX',
+      
+      // Data Science & AI
+      'machine learning': 'machine learning',
+      'neural network': 'neural network',
+      'artificial intelligence': 'AI',
+      'ten sir flow': 'TensorFlow',
+      'tensor flow': 'TensorFlow',
+      'pi torch': 'PyTorch',
+      'pandas': 'pandas',
+      'num pie': 'NumPy',
+      'numpy': 'NumPy',
+      'scikit learn': 'scikit-learn',
+      'sk learn': 'scikit-learn',
+      
+      // Game Development & VR/AR
+      '3d wife': '3DOF',
+      '3d wifes': '3DOF',
+      '3 d wife': '3DOF',
+      'three d wife': '3DOF',
+      'three degrees of wife': '3DOF',
+      '6d off': '6DOF',
+      '6 d off': '6DOF',
+      'six degrees of freedom': '6DOF',
+      'game object': 'GameObject',
+      'game objects': 'GameObjects',
+      'ray casting': 'raycasting',
+      'collision detector': 'collision detection',
+      'on collision enter': 'OnCollisionEnter',
+      'on trigger enter': 'OnTriggerEnter',
+      'rigid body': 'rigidbody',
+      'virtual reality': 'VR',
+      'augmented reality': 'AR',
+      'mixed reality': 'MR',
+      
+      // Mobile Development
+      'i o s': 'iOS',
+      'android studio': 'Android Studio',
+      'react native': 'React Native',
+      'flutter': 'Flutter',
+      'xamarin': 'Xamarin',
+      
+      // Database
+      'my sequel': 'MySQL',
+      'post gray sequel': 'PostgreSQL',
+      'sequel server': 'SQL Server',
+      'no sequel': 'NoSQL',
+      'mongo db': 'MongoDB',
+      
+      // DevOps & Cloud
+      'docker': 'Docker',
+      'cuber net is': 'Kubernetes',
+      'kubernetes': 'Kubernetes',
+      'amazon web services': 'AWS',
+      'a w s': 'AWS',
+      'microsoft azure': 'Azure',
+      'google cloud platform': 'GCP',
+      'g c p': 'GCP',
+      'continuous integration': 'CI',
+      'continuous deployment': 'CD',
+      'ci cd': 'CI/CD',
+      
+      // General Programming
+      'object oriented': 'object-oriented',
+      'get hub': 'GitHub',
+      'git hub': 'GitHub',
+      'stack overflow': 'Stack Overflow',
+      'visual studio code': 'VS Code',
+      'vs code': 'VS Code',
+      'integrated development environment': 'IDE',
+      'application programming interface': 'API',
+      
+      // Cybersecurity
+      'encryption': 'encryption',
+      'two factor authentication': '2FA',
+      'secure socket layer': 'SSL',
+      'transport layer security': 'TLS',
+      'virtual private network': 'VPN',
+      'fire wall': 'firewall',
+      
+      // UI/UX Design
+      'user interface': 'UI',
+      'user experience': 'UX',
+      'wire frame': 'wireframe',
+      'wire frames': 'wireframes',
+      'prototype': 'prototype',
+      'figma': 'Figma',
+      'adobe x d': 'Adobe XD',
+      'oop': 'OOP',
+      
+      // VR terms
+      'vr controller': 'VR controller',
+      'virtual reality': 'VR',
+      'headset': 'VR headset',
+      'oculus': 'Oculus',
+      'meta quest': 'Meta Quest'
+    };
+    
+    // Apply corrections (case-insensitive)
+    for (const [wrong, right] of Object.entries(corrections)) {
+      const regex = new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      corrected = corrected.replace(regex, right);
+    }
+    
+    // Fix common punctuation issues
+    corrected = corrected.replace(/\s+/g, ' ').trim();
+    
+    return corrected;
+  }
+
+  // Handle voice commands from speech recognition
+  handleVoiceCommand(transcript) {
+    console.log('🎤 Processing voice command:', transcript);
+    
+    // Clean up the transcript
+    const command = transcript.toLowerCase().trim();
+    
+    if (!command) {
+      console.log('🎤 Empty command, ignoring');
+      return;
+    }
+    
+    // Show that we received the voice input
+    this.showVoiceResponseIndicator(`You said: "${transcript}"`);
+    
+    // Check for Study Pouch commands first
+    if (this.handleStudyPouchCommand(transcript)) {
+      return; // Command was handled, don't send to AI
+    }
+    
+    // Check for panel control commands
+    const lowerMessage = transcript.toLowerCase().trim();
+    
+    if (lowerMessage.includes('close') || lowerMessage.includes('hide')) {
+      this.hidePanels();
+      this.showResponse({
+        type: 'learning_guidance',
+        title: '👋 Panel Closed',
+        content: '<div class="kana-ai-response"><p>Chat panel closed. Use Ctrl+Space to ask me anything!</p></div>'
+      });
+      return;
+    }
+    
+    if (lowerMessage.includes('open chat') || lowerMessage.includes('show chat')) {
+      this.showChatPanel();
+      return;
+    }
+    
+    // Automatically process the voice command with AI
+    console.log('🎤 Auto-processing voice command with AI:', transcript);
+    
+    // Ensure the chat panel is visible to show the response
+    if (!this.chatPanel.classList.contains('visible')) {
+      this.showChatPanel();
+    }
+    
+    // Process the message with AI immediately
+    this.analyzeScreenContent(transcript);
+  }
+
+  showVoiceResponseIndicator(message) {
+    // Create or update voice response indicator
+    let indicator = document.getElementById('kana-voice-response');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'kana-voice-response';
+      indicator.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: linear-gradient(135deg, #4CAF50, #66BB6A);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 25px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 2147483647;
+        box-shadow: 0 4px 20px rgba(76, 175, 80, 0.4);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        max-width: 300px;
+        word-wrap: break-word;
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+      `;
+      document.body.appendChild(indicator);
+    }
+    
+    indicator.textContent = message;
+    indicator.style.opacity = '1';
+    indicator.style.transform = 'translateX(0)';
+    
+    // Hide after 3 seconds
+    setTimeout(() => {
+      indicator.style.opacity = '0';
+      indicator.style.transform = 'translateX(100%)';
+    }, 3000);
+  }
+
   processVoiceCommand(command = '') {
-    console.log('Processing voice command:', command);
     this.updateOrbState('thinking');
     this.playAudioFeedback('thinking');
     
@@ -727,34 +1422,21 @@ class KanaAssistant {
   }
 
   async analyzeScreenContent(userQuestion) {
-    console.log('Analyzing screen content for question:', userQuestion);
     try {
       // Get visible text content from the page
       const pageContent = this.extractPageContent();
-      console.log('Extracted page content:', pageContent);
       
       // Prioritize content based on what's currently visible in viewport
       const prioritizedContent = this.prioritizeVisibleContent(pageContent);
-      console.log('Prioritized visible content:', prioritizedContent);
-      console.log('Current section detected:', prioritizedContent.currentSection);
-      if (prioritizedContent.currentSection) {
-        console.log('Section type:', prioritizedContent.currentSection.type);
-        console.log('Question number:', prioritizedContent.currentSection.questionNumber);
-        console.log('Full section text:', prioritizedContent.currentSection.fullText);
-      }
-      console.log('Visible headings:', prioritizedContent.visibleHeadings);
       
       // Find the most relevant visible content for the user's question
       const relevantVisibleContent = this.findMostRelevantVisibleContent(userQuestion, prioritizedContent);
-      console.log('Most relevant visible content:', relevantVisibleContent);
       
       // Identify the LMS platform
       const platform = this.identifyLMSPlatform();
-      console.log('Identified platform:', platform);
       
       // Parse the user's question with priority on visible content
       const questionContext = this.parseUserQuestionWithViewport(userQuestion, prioritizedContent, relevantVisibleContent);
-      console.log('Question context with viewport:', questionContext);
       
       // Generate an educational response (not an answer)
       const educationalResponse = this.generateEducationalResponse(questionContext, pageContent, platform);
@@ -773,67 +1455,44 @@ class KanaAssistant {
         questionContext: questionContext,
         pageContent: pageContent,
         prioritizedContent: prioritizedContent,
-        relevantVisibleContent: relevantVisibleContent,
-        timestamp: new Date().toISOString()
+        relevantVisibleContent: relevantVisibleContent
       };
       
-      console.log('Created context for AI processing:', context);
-      
       // Process with AI
-      const response = await this.processWithAI(context);
-      console.log('Got AI response:', response);
-      
-      this.showResponse(response);
-      
-      // Store the response in conversation context
-      this.conversationContext.addResponse(response);
-      
-      this.updateOrbState('idle');
-      console.log('Response shown, orb state reset to idle');
+      this.processWithAI(context);
       
     } catch (error) {
       console.error('Error analyzing screen content:', error);
-      this.showError('Sorry, I encountered an error analyzing the content.');
-      this.updateOrbState('idle');
+      this.showError(`I encountered an error analyzing the page content: ${error.message}`);
     }
   }
 
   extractPageContent() {
-    console.log('Starting content extraction...');
-    // Extract relevant content from the page
-    const content = {
-      title: document.title || 'Untitled Page',
-      headings: [],
-      questions: [],
-      assignments: [],
-      codeBlocks: [],
-      learningObjectives: [],
-      text: [],
-      links: []
-    };
-    
     try {
-      // Get headings with their hierarchy
-      const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-      headings.forEach((h, index) => {
-        content.headings.push({
-          level: h.tagName.toLowerCase(),
-          text: h.textContent.trim(),
-          id: h.id || `heading-${index}`,
-          position: index
-        });
-      });
-      
-      // Enhanced question detection patterns
+      const content = {
+        title: document.title,
+        url: window.location.href,
+        headings: [],
+        text: [],
+        questions: [],
+        codeBlocks: [],
+        assignments: [],
+        learningObjectives: [],
+        links: []
+      };
+
+      // Question patterns to look for
       const questionPatterns = [
-        /(?:question|problem|exercise)\s*(?:#|\d+|[a-z])[:\.]?\s*(.*?)(?=(?:question|problem|exercise|\n\n|$))/gi,
-        /^\d+[\.\)]\s+(.+?)(?=^\d+[\.\)]|$)/gm,
-        /^[a-z][\.\)]\s+(.+?)(?=^[a-z][\.\)]|$)/gm,
-        /(?:what|how|why|when|where|which|who).*?\?/gi,
-        /(?:explain|describe|analyze|compare|evaluate|discuss).*?(?=\.|$)/gi,
-        /(?:calculate|solve|find|determine|prove).*?(?=\.|$)/gi
+        /\b\d+\.\s*[A-Z][^.!?]*[?]/g,
+        /Question\s*\d*[:\-]?\s*[A-Z][^.!?]*[?]/gi,
+        /What\s+[^.!?]*[?]/gi,
+        /How\s+[^.!?]*[?]/gi,
+        /Why\s+[^.!?]*[?]/gi,
+        /When\s+[^.!?]*[?]/gi,
+        /Where\s+[^.!?]*[?]/gi,
+        /Which\s+[^.!?]*[?]/gi
       ];
-      
+
       // Look for questions in various elements
       const questionSelectors = [
         '.question', '.problem', '.exercise', '.quiz-question',
@@ -939,12 +1598,35 @@ class KanaAssistant {
           }
         });
       });
+
+      // Get headings
+      const headingSelectors = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+      headingSelectors.forEach(selector => {
+        const headings = document.querySelectorAll(selector);
+        headings.forEach(heading => {
+          content.headings.push({
+            text: heading.textContent.trim(),
+            level: parseInt(selector.slice(1)),
+            element: heading
+          });
+        });
+      });
+      
+      return content;
     } catch (error) {
       console.error('Error extracting page content:', error);
-      return content;
+      return {
+        title: document.title || '',
+        url: window.location.href,
+        headings: [],
+        text: [],
+        questions: [],
+        codeBlocks: [],
+        assignments: [],
+        learningObjectives: [],
+        links: []
+      };
     }
-    
-    return content;
   }
 
   extractDates(text) {
@@ -1013,7 +1695,7 @@ class KanaAssistant {
         id: '',
         parent: '',
         siblings: 0,
-        textLength: 0,
+        text,
         isVisible: false
       };
     }
@@ -1369,8 +2051,6 @@ class KanaAssistant {
         .split(' ')
         .filter(term => term.length > 2 && !['what', 'how', 'why', 'when', 'where', 'this', 'that', 'the', 'and', 'for'].includes(term));
       
-      console.log('Search terms for relevance:', searchTerms);
-      
       // Function to calculate relevance score for text content
       const calculateRelevanceScore = (text) => {
         if (!text || typeof text !== 'string') return 0;
@@ -1502,7 +2182,6 @@ class KanaAssistant {
       relevantContent.text = relevantContent.text.slice(0, 8);
       relevantContent.links = relevantContent.links.slice(0, 3);
       
-      console.log('Found relevant content with score:', relevantContent.relevanceScore);
       return relevantContent;
       
     } catch (error) {
@@ -1632,20 +2311,38 @@ class KanaAssistant {
   }
 
   async processWithAI(context) {
-    console.log("Processing with Gemini AI");
-    
     const { questionContext, pageContent, platform, userQuestion } = context;
-    const GEMINI_API_KEY = "AIzaSyC1yj16iVGJodO5uWKa0sRYhU7ma9R0qKM";
     
-    // Default to gemini-2.5-flash since API key is confirmed to work
-    const PRIMARY_MODEL = "gemini-2.5-flash";
+    // Try to get API key from storage, fallback to default
+    let GEMINI_API_KEY = "AIzaSyBkyfIR24sNjKIoPQAgHmgNONCu38CqvHQ";
+    try {
+      const result = await chrome.storage.local.get(['geminiApiKey']);
+      if (result.geminiApiKey) {
+        GEMINI_API_KEY = result.geminiApiKey;
+        this.log('Using custom Gemini API key from storage');
+      }
+    } catch (error) {
+      this.log('Failed to get API key from storage, using default', 'warn');
+    }
+    
+    // Prioritize the best performing models first
+    const PRIMARY_MODEL = "gemini-2.0-flash";
     const FALLBACK_MODELS = [
-      "gemini-2.0-flash",
-      "gemini-1.5-flash-002", 
+      "gemini-2.5-flash",
       "gemini-1.5-flash",
-      "gemini-1.5-pro-002",
-      "gemini-1.5-pro"
+      "gemini-1.5-pro",
+      "gemini-1.5-flash-002", 
+      "gemini-1.5-pro-002"
     ];
+    
+    // Smart model selection - try last successful model first
+    let modelsToTest;
+    if (this.lastSuccessfulModel && this.lastSuccessfulModel !== PRIMARY_MODEL) {
+      // Put last successful model first, then primary, then fallbacks
+      modelsToTest = [this.lastSuccessfulModel, PRIMARY_MODEL, ...FALLBACK_MODELS.filter(m => m !== this.lastSuccessfulModel)];
+    } else {
+      modelsToTest = [PRIMARY_MODEL, ...FALLBACK_MODELS];
+    }
     
     try {
       // Update orb state to show we're thinking
@@ -1666,12 +2363,17 @@ class KanaAssistant {
       let errorMessage = "";
       let modelUsed = null;
       
-      // Skip model availability check - use primary model directly
-      const modelsToTest = [PRIMARY_MODEL, ...FALLBACK_MODELS];
-      console.log("Models to test:", modelsToTest);
+      // Skip model availability check - use smart model selection
+      if (this.lastSuccessfulModel) {
+        console.log(`Smart model selection: trying last successful model (${this.lastSuccessfulModel}) first`);
+      }
+      console.log("Models to test:", modelsToTest.slice(0, 3)); // Only log first 3 for cleaner output
+      
+      // Limit to 3 models max for faster response (prioritizing the best ones)
+      const limitedModels = modelsToTest.slice(0, 3);
       
       // Try each model until one works
-      for (const model of modelsToTest) {
+      for (const model of limitedModels) {
         try {
           console.log(`Trying model: ${model}`);
           
@@ -1720,6 +2422,7 @@ class KanaAssistant {
           
           if (response.ok) {
             modelUsed = model;
+            this.lastSuccessfulModel = model; // Remember this model for next time
             console.log(`Successfully connected using model: ${model}`);
             break;
           } else {
@@ -1779,6 +2482,7 @@ class KanaAssistant {
               
               if (response.ok) {
                 modelUsed = model + " (v1beta)";
+                this.lastSuccessfulModel = model; // Remember the base model for next time
                 console.log(`Successfully connected using model: ${model} on v1beta API`);
                 break;
               }
@@ -1879,8 +2583,14 @@ class KanaAssistant {
         
         console.log("Received Gemini response:", aiResponseText.substring(0, 100) + "...");
         
-        // Parse the AI response to our format
-        const formattedResponse = this.parseGeminiResponse(aiResponseText, questionContext);
+        // Parse the AI response to our format (now async to handle YouTube searches)
+        const formattedResponse = await this.parseGeminiResponse(aiResponseText, questionContext);
+        
+        // Update the UI with the real response
+        this.showResponse(formattedResponse);
+        
+        // Reset orb state back to idle
+        this.updateOrbState('idle');
         
         // Play audio feedback for response received
         this.playAudioFeedback('response');
@@ -1901,12 +2611,116 @@ class KanaAssistant {
         // Fall back to demo response if API fails
         console.log("All Gemini models failed, using demo response instead");
         console.log("Last error message:", errorMessage);
-        return this.generateDemoResponse(userQuestion, pageContent, platform, `All Gemini models failed: ${errorMessage}`);
+        
+        // Check if it's a quota/billing issue
+        if (errorMessage.includes('quota') || errorMessage.includes('billing') || errorMessage.includes('exceeded')) {
+          // Show user-friendly message about API key limits
+          const quotaResponse = {
+            content: `
+              <h3>🤖 Kana AI Assistant</h3>
+              <div style="background: rgba(255, 200, 100, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #ff9800; margin: 10px 0;">
+                <h4>⚠️ API Quota Exceeded</h4>
+                <p>The AI service has reached its usage limit. Here's what you can do:</p>
+                <ul>
+                  <li><strong>Wait a few minutes</strong> - Quotas often reset automatically</li>
+                  <li><strong>Try again later</strong> - Daily limits reset at midnight Pacific Time</li>
+                  <li><strong>Use extension options</strong> - Add your own Gemini API key for unlimited usage</li>
+                </ul>
+                <p>💡 <strong>Meanwhile, I can still help!</strong> I found ${this.realYouTubeFinder ? 'real educational videos' : 'learning resources'} for you.</p>
+              </div>
+              <h4>📚 Learning Guidance for Unity UI</h4>
+              <p>Based on what I can see on your screen, here are some ways to understand Unity UI better:</p>
+              <ul>
+                <li><strong>Start with Canvas:</strong> The Canvas is the root component for all UI elements</li>
+                <li><strong>UI Elements:</strong> Buttons, Images, and Text are the building blocks</li>
+                <li><strong>Layout Groups:</strong> Use these to organize and position elements automatically</li>
+                <li><strong>Event System:</strong> Handles user interactions like clicks and touches</li>
+              </ul>
+              <h4>🎥 Recommended Learning</h4>
+              <p>Search YouTube for these specific tutorials:</p>
+              <ul>
+                <li>"Unity Canvas and UI System tutorial"</li>
+                <li>"Unity Button Events and OnClick"</li>
+                <li>"Unity UI Layout Groups explained"</li>
+                <li>"Unity UI Responsive Design"</li>
+              </ul>
+              <p><em>💡 Tip: Unity's official documentation and Unity Learn platform also have excellent UI tutorials!</em></p>
+            `,
+            videoData: null,
+            hasRealContent: true
+          };
+          this.showResponse(quotaResponse);
+          this.updateOrbState('idle');
+          return quotaResponse;
+        }
+        
+        const demoResponse = this.generateSafeDemoResponse(userQuestion, pageContent, platform, `All Gemini models failed: ${errorMessage}`);
+        this.showResponse(demoResponse);
+        this.updateOrbState('idle');
+        return demoResponse;
       }
     } catch (error) {
       console.error("AI processing error:", error);
-      return this.generateDemoResponse(userQuestion, pageContent, platform, error.message);
+      
+      // Use error handler if available
+      if (this.errorHandler) {
+        const errorStrategy = await this.errorHandler.handleError(error, {
+          context: 'AI_PROCESSING',
+          userQuestion,
+          platform
+        });
+        
+        if (errorStrategy.shouldRetry && errorStrategy.retryCount < 3) {
+          setTimeout(() => {
+            this.processWithAI({
+              ...context,
+              retryCount: errorStrategy.retryCount
+            });
+          }, errorStrategy.retryDelay);
+          return;
+        }
+      }
+      
+      // Generate safe demo response
+      const demoResponse = this.generateSafeDemoResponse(userQuestion, pageContent, platform, error.message);
+      this.showResponse(demoResponse);
+      this.updateOrbState('idle');
+      return demoResponse;
     }
+  }
+  
+  generateSafeDemoResponse(userQuestion, pageContent, platform, errorMessage) {
+    // Use modular demo response generator if available
+    if (this.demoResponseGenerator) {
+      return this.demoResponseGenerator.generateSafeResponse(userQuestion, pageContent, platform, errorMessage);
+    }
+    
+    // Fallback to basic safe response without potentially fake URLs
+    return {
+      type: 'learning_guidance',
+      title: 'Learning Support',
+      content: `
+        <div class="kana-learning-help">
+          <h3>🎯 Let me help you learn!</h3>
+          <p>I see you're asking about: <strong>"${userQuestion.substring(0, 100)}${userQuestion.length > 100 ? '...' : ''}"</strong></p>
+          
+          <h4>📚 Study Strategy</h4>
+          <ul>
+            <li>Break complex problems into smaller parts</li>
+            <li>Look for patterns or similar examples</li>
+            <li>Practice with what you know</li>
+            <li>Ask specific questions about confusing parts</li>
+          </ul>
+          
+          <p><strong>What specific part would you like help understanding better?</strong></p>
+          <p><em>Note: AI features are temporarily unavailable. Full functionality will return shortly.</em></p>
+        </div>
+      `,
+      resources: [],
+      encouragement: "Every expert was once a beginner. You're doing great by asking questions!",
+      hasValidatedContent: true,
+      containsYouTubeUrls: false
+    };
   }
   
   generateDemoResponse(userQuestion, pageContent, platform, errorMessage) {
@@ -1968,432 +2782,8 @@ class KanaAssistant {
     };
   }
   
-  detectSubject(userQuestion, pageContent) {
-    // Enhanced subject detection with more specific patterns
-    const subjectPatterns = {
-      "Unity VR Development": /vr|virtual reality|oculus|headset|controller|interaction|pickup|grab|teleport|6dof|3dof|vr room|unity.*vr|vr.*unity/i,
-      "Unity Game Development": /unity(?!.*vr)|game development|gameobject|prefab|script|component|collision|rigidbody|transform|unity.*game|game.*unity/i,
-      "Unity Shader Programming": /shader|shadergraph|material|texture|mesh|uv|vertex|fragment|hlsl|surface shader|unity.*shader/i,
-      "Web Development": /html|css|javascript|react|vue|angular|nodejs|frontend|backend|web.*dev|fullstack/i,
-      "Mobile Development": /android|ios|swift|kotlin|react native|flutter|mobile.*dev|app.*dev/i,
-      "Data Science": /machine learning|data science|python.*data|pandas|numpy|tensorflow|pytorch|ai.*model|data.*analysis/i,
-      "Computer Science": /algorithm|data structure|binary tree|linked list|sorting|searching|complexity|big o|computer.*science/i,
-      "Programming General": /code|programming|function|variable|class|method|array|loop|debug|software/i,
-      "Mathematics": /math|algebra|calculus|equation|geometry|trigonometry|number|formula|linear algebra/i,
-      "Physics": /physics|force|motion|energy|gravity|mass|velocity|acceleration|momentum|mechanics/i,
-      "Chemistry": /chemistry|chemical|reaction|molecule|atom|element|compound|solution|acid|base/i,
-      "Biology": /biology|cell|organism|gene|protein|evolution|ecosystem|species|tissue|organ/i,
-      "History": /history|century|war|revolution|civilization|empire|kingdom|president|monarch|era|period/i,
-      "Literature": /literature|book|novel|author|character|plot|theme|story|writing|poem|poetry/i,
-      "Art": /art|design|color|composition|drawing|painting|sculpture|artist|creative|visual/i
-    };
-    
-    // Check the question first with priority order (most specific first)
-    for (const [subject, pattern] of Object.entries(subjectPatterns)) {
-      if (pattern.test(userQuestion)) {
-        return subject;
-      }
-    }
-    
-    // Check page content safely
-    try {
-      const pageText = (pageContent.title || '') + ' ' + 
-                      (pageContent.headings ? pageContent.headings.map(h => h.text || '').join(' ') : '') + ' ' +
-                      (pageContent.text ? pageContent.text.slice(0, 3).join(' ') : '');
-      
-      for (const [subject, pattern] of Object.entries(subjectPatterns)) {
-        if (pattern.test(pageText)) {
-          return subject;
-        }
-      }
-    } catch (error) {
-      console.warn('Error in detectSubject:', error);
-    }
-    
-    return null;
-  }
-
-  getSubjectResources(subject, userQuestion) {
-    // Return subject-specific resources with real links
-    const baseResources = [
-      {
-        title: "Khan Academy",
-        url: "https://www.khanacademy.org/",
-        description: "Free online courses and practice exercises"
-      },
-      {
-        title: "Coursera",
-        url: "https://www.coursera.org/",
-        description: "University courses and specializations"
-      }
-    ];
-
-    switch (subject) {
-      case 'Unity VR Development':
-        // Check for specific VR interaction topics
-        if (/pickup|grab|interact|object.*interact/i.test(userQuestion)) {
-          return [
-            {
-              title: "Unity VR Object Interaction Tutorial",
-              url: "https://www.youtube.com/watch?v=2WisM6xcboo",
-              description: "Complete guide to VR object pickup and interaction"
-            },
-            {
-              title: "VR Interaction Framework - Unity Learn",
-              url: "https://learn.unity.com/tutorial/vr-interaction-framework",
-              description: "Official Unity VR interaction system tutorial"
-            },
-            {
-              title: "How to Pick Up Objects in VR",
-              url: "https://www.youtube.com/watch?v=DA_cFl_MN_k",
-              description: "Step-by-step VR object grabbing mechanics"
-            },
-            {
-              title: "Unity XR Interaction Toolkit",
-              url: "https://docs.unity3d.com/Packages/com.unity.xr.interaction.toolkit@latest/",
-              description: "Official XR Interaction Toolkit documentation"
-            }
-          ];
-        } else if (/teleport|movement|locomotion/i.test(userQuestion)) {
-          return [
-            {
-              title: "VR Teleportation Tutorial - Unity",
-              url: "https://www.youtube.com/watch?v=KHWuTBmT1oI",
-              description: "Implementing VR teleportation systems"
-            },
-            {
-              title: "VR Locomotion Techniques",
-              url: "https://learn.unity.com/tutorial/vr-locomotion",
-              description: "Different approaches to VR movement"
-            },
-            {
-              title: "Unity VR Movement Scripts",
-              url: "https://www.youtube.com/watch?v=2D_qEgk_ZLs",
-              description: "Complete VR movement implementation"
-            }
-          ];
-        } else {
-          // General VR development resources
-          return [
-            {
-              title: "Unity VR Development Course",
-              url: "https://learn.unity.com/course/oculus-vr-development",
-              description: "Complete Unity VR development course"
-            },
-            {
-              title: "VR Development with Unity - YouTube Series",
-              url: "https://www.youtube.com/playlist?list=PLrk7hDwk64-Y6Geabn_xNrjuCnLKd2klJ",
-              description: "Comprehensive VR development tutorial series"
-            },
-            {
-              title: "Unity XR Development Documentation",
-              url: "https://docs.unity3d.com/Manual/XR.html",
-              description: "Official Unity XR and VR documentation"
-            }
-          ];
-        }
-
-      case 'Unity Game Development':
-        if (/collision|physics|rigidbody/i.test(userQuestion)) {
-          return [
-            {
-              title: "Unity Physics and Collision Tutorial",
-              url: "https://www.youtube.com/watch?v=Bc9lmHjhagc",
-              description: "Understanding Unity physics and collisions"
-            },
-            {
-              title: "Rigidbody Mechanics - Unity Learn",
-              url: "https://learn.unity.com/tutorial/physics-and-rigidbodies",
-              description: "Official Unity physics tutorial"
-            },
-            {
-              title: "Unity Collision Detection Guide",
-              url: "https://docs.unity3d.com/ScriptReference/Collision.html",
-              description: "Official collision detection documentation"
-            }
-          ];
-        } else if (/script|component|gameobject/i.test(userQuestion)) {
-          return [
-            {
-              title: "Unity Scripting for Beginners",
-              url: "https://www.youtube.com/watch?v=UuKX9OJDXDI",
-              description: "Complete Unity C# scripting tutorial"
-            },
-            {
-              title: "Unity Component System",
-              url: "https://learn.unity.com/tutorial/components-and-scripts",
-              description: "Understanding Unity's component architecture"
-            },
-            {
-              title: "Unity Scripting API Reference",
-              url: "https://docs.unity3d.com/ScriptReference/",
-              description: "Complete Unity scripting documentation"
-            }
-          ];
-        } else {
-          return [
-            {
-              title: "Unity Learn Platform",
-              url: "https://learn.unity.com/",
-              description: "Official Unity tutorials and courses"
-            },
-            {
-              title: "Brackeys Unity Tutorials",
-              url: "https://www.youtube.com/c/Brackeys",
-              description: "Popular Unity game development tutorials"
-            },
-            {
-              title: "Unity Documentation",
-              url: "https://docs.unity3d.com/",
-              description: "Official Unity scripting and component reference"
-            }
-          ];
-        }
-
-      case 'Unity Shader Programming':
-        return [
-          {
-            title: "Unity Shader Graph Tutorial",
-            url: "https://www.youtube.com/watch?v=Ar9eIn4z6XE",
-            description: "Complete Shader Graph tutorial for beginners"
-          },
-          {
-            title: "Unity Shader Graph Documentation",
-            url: "https://docs.unity3d.com/Packages/com.unity.shadergraph@latest/",
-            description: "Official Shader Graph documentation"
-          },
-          {
-            title: "HLSL Shader Programming",
-            url: "https://www.youtube.com/watch?v=C4_RG8ZWCfM",
-            description: "Understanding HLSL for Unity shaders"
-          },
-          {
-            title: "Unity Shaders and Effects Cookbook",
-            url: "https://catlikecoding.com/unity/tutorials/rendering/",
-            description: "Advanced Unity rendering and shader tutorials"
-          }
-        ];
-
-      case 'Web Development':
-        if (/html|css/i.test(userQuestion)) {
-          return [
-            {
-              title: "HTML & CSS Full Course",
-              url: "https://www.youtube.com/watch?v=G3e-cpL7ofc",
-              description: "Complete HTML and CSS tutorial"
-            },
-            {
-              title: "MDN Web Docs - HTML",
-              url: "https://developer.mozilla.org/en-US/docs/Web/HTML",
-              description: "Comprehensive HTML documentation"
-            },
-            {
-              title: "CSS-Tricks",
-              url: "https://css-tricks.com/",
-              description: "CSS tutorials, guides, and reference"
-            }
-          ];
-        } else if (/javascript|js/i.test(userQuestion)) {
-          return [
-            {
-              title: "JavaScript Full Course for Beginners",
-              url: "https://www.youtube.com/watch?v=PkZNo7MFNFg",
-              description: "Complete JavaScript tutorial"
-            },
-            {
-              title: "MDN JavaScript Guide",
-              url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
-              description: "Official JavaScript documentation"
-            },
-            {
-              title: "JavaScript.info",
-              url: "https://javascript.info/",
-              description: "Modern JavaScript tutorial"
-            }
-          ];
-        } else {
-          return [
-            {
-              title: "FreeCodeCamp Web Development",
-              url: "https://www.freecodecamp.org/",
-              description: "Free full-stack web development course"
-            },
-            {
-              title: "The Odin Project",
-              url: "https://www.theodinproject.com/",
-              description: "Free full-stack curriculum"
-            },
-            {
-              title: "MDN Web Docs",
-              url: "https://developer.mozilla.org/",
-              description: "Comprehensive web development documentation"
-            }
-          ];
-        }
-
-      case 'Computer Science':
-        return [
-          {
-            title: "CS50 Introduction to Computer Science",
-            url: "https://www.youtube.com/watch?v=YoXxevp1WRQ&list=PLhQjrBD2T382_R182iC2gNZI9HzWFMC_8",
-            description: "Harvard's comprehensive intro CS course"
-          },
-          {
-            title: "Data Structures and Algorithms",
-            url: "https://www.youtube.com/watch?v=RBSGKlAvoiM",
-            description: "Complete DSA course for beginners"
-          },
-          {
-            title: "LeetCode",
-            url: "https://leetcode.com/",
-            description: "Practice coding problems and algorithms"
-          },
-          {
-            title: "GeeksforGeeks",
-            url: "https://www.geeksforgeeks.org/",
-            description: "Computer science tutorials and practice"
-          }
-        ];
-
-      case 'Mathematics':
-        return [
-          {
-            title: "Khan Academy Math",
-            url: "https://www.khanacademy.org/math",
-            description: "Free math lessons from basic to advanced"
-          },
-          {
-            title: "Professor Leonard",
-            url: "https://www.youtube.com/c/ProfessorLeonard",
-            description: "Clear math explanations and examples"
-          },
-          {
-            title: "Wolfram Alpha",
-            url: "https://www.wolframalpha.com/",
-            description: "Step-by-step solutions and calculations"
-          },
-          {
-            title: "Paul's Online Math Notes",
-            url: "https://tutorial.math.lamar.edu/",
-            description: "Comprehensive calculus and algebra notes"
-          }
-        ];
-
-      case 'Physics':
-        return [
-          {
-            title: "Khan Academy Physics",
-            url: "https://www.khanacademy.org/science/physics",
-            description: "Interactive physics lessons and practice"
-          },
-          {
-            title: "Physics Classroom",
-            url: "https://www.physicsclassroom.com/",
-            description: "Comprehensive physics tutorials and concepts"
-          },
-          {
-            title: "MinutePhysics",
-            url: "https://www.youtube.com/user/minutephysics",
-            description: "Quick, visual physics explanations"
-          },
-          {
-            title: "HyperPhysics",
-            url: "http://hyperphysics.phy-astr.gsu.edu/hbase/hframe.html",
-            description: "Interactive physics concept map"
-          }
-        ];
-
-      case 'Chemistry':
-        return [
-          {
-            title: "Khan Academy Chemistry",
-            url: "https://www.khanacademy.org/science/chemistry",
-            description: "Complete chemistry course with practice"
-          },
-          {
-            title: "Crash Course Chemistry",
-            url: "https://www.youtube.com/playlist?list=PL8dPuuaLjXtPHzzYuWy6fYEaX9mQQ8oGr",
-            description: "Engaging chemistry video series"
-          },
-          {
-            title: "ChemCollective",
-            url: "http://chemcollective.org/",
-            description: "Virtual chemistry labs and simulations"
-          },
-          {
-            title: "PubChem",
-            url: "https://pubchem.ncbi.nlm.nih.gov/",
-            description: "Chemical database and molecular information"
-          }
-        ];
-
-      case 'Biology':
-        return [
-          {
-            title: "Khan Academy Biology",
-            url: "https://www.khanacademy.org/science/biology",
-            description: "Comprehensive biology lessons and practice"
-          },
-          {
-            title: "Crash Course Biology",
-            url: "https://www.youtube.com/playlist?list=PL3EED4C1D684D3ADF",
-            description: "Fun and informative biology videos"
-          },
-          {
-            title: "Biology Online",
-            url: "https://www.biologyonline.com/",
-            description: "Biology dictionary and study guides"
-          },
-          {
-            title: "NCBI Learning Center",
-            url: "https://www.ncbi.nlm.nih.gov/home/learn/",
-            description: "Bioinformatics and molecular biology resources"
-          }
-        ];
-
-      default:
-        // Check for specific keywords in the question to provide targeted resources
-        if (/programming|code|software/i.test(userQuestion)) {
-          return [
-            {
-              title: "FreeCodeCamp",
-              url: "https://www.freecodecamp.org/",
-              description: "Learn to code for free with interactive lessons"
-            },
-            {
-              title: "Codecademy",
-              url: "https://www.codecademy.com/",
-              description: "Interactive programming courses"
-            },
-            {
-              title: "Stack Overflow",
-              url: "https://stackoverflow.com/",
-              description: "Programming Q&A community"
-            }
-          ];
-        } else if (/study|learn|education/i.test(userQuestion)) {
-          return [
-            {
-              title: "Coursera",
-              url: "https://www.coursera.org/",
-              description: "University-level courses from top institutions"
-            },
-            {
-              title: "edX",
-              url: "https://www.edx.org/",
-              description: "Free online courses from universities"
-            },
-            {
-              title: "Khan Academy",
-              url: "https://www.khanacademy.org/",
-              description: "Free education for anyone, anywhere"
-            }
-          ];
-        } else {
-          return baseResources;
-        }
-    }
-  }
+// ...existing code...
+// ...existing code...
   
   extractKeyTerms(pageContent, count = 3) {
     // Extract likely key terms from the page content
@@ -2425,15 +2815,247 @@ class KanaAssistant {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .filter(Boolean);
   }
+
+  // Helper methods for technical domain enhancement (all fields)
+  getTechnicalTerms() {
+    return [
+      // Programming Languages
+      'JavaScript', 'Python', 'Java', 'C#', 'C++', 'TypeScript', 'PHP', 'Ruby', 'Go', 'Rust', 'Swift', 'Kotlin',
+      // Web Development
+      'HTML', 'CSS', 'React', 'Vue', 'Angular', 'Node.js', 'Express', 'REST API', 'GraphQL', 'webpack', 'responsive design',
+      // Data Science & AI
+      'machine learning', 'neural network', 'data analysis', 'pandas', 'numpy', 'tensorflow', 'pytorch', 'algorithm',
+      // Game Development
+      'Unity', 'Unreal', 'game engine', 'GameObject', 'physics', 'rendering', 'shader', 'animation', 'collision',
+      // VR/AR/XR
+      'VR', 'AR', 'MR', 'XR', '3DOF', '6DOF', 'spatial computing', 'immersive', 'tracking', 'haptic feedback',
+      // Mobile Development
+      'iOS', 'Android', 'React Native', 'Flutter', 'Xamarin', 'mobile app', 'responsive', 'touch interface',
+      // Database & Backend
+      'SQL', 'NoSQL', 'MongoDB', 'PostgreSQL', 'database', 'backend', 'server', 'API', 'microservices',
+      // DevOps & Cloud
+      'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'CI/CD', 'deployment', 'cloud computing', 'serverless',
+      // Cybersecurity
+      'encryption', 'authentication', 'authorization', 'firewall', 'penetration testing', 'vulnerability',
+      // UI/UX Design
+      'user interface', 'user experience', 'wireframe', 'prototype', 'usability', 'accessibility', 'design system'
+    ];
+  }
+
+  getEducationalVideos(topic) {
+    const videoMappings = {
+      // Programming
+      'javascript': 'JavaScript fundamentals tutorial',
+      'python': 'Python programming for beginners',
+      'java': 'Java programming tutorial',
+      'c#': 'C# programming fundamentals',
+      'web development': 'Full stack web development course',
+      'react': 'React.js complete tutorial',
+      
+      // Data Science
+      'machine learning': 'Machine learning explained',
+      'data science': 'Data science fundamentals',
+      'neural networks': 'Neural networks explained',
+      'algorithms': 'Algorithms and data structures',
+      
+      // Game Development
+      'unity': 'Unity game development tutorial',
+      'game development': 'Game development fundamentals',
+      'game design': 'Game design principles',
+      
+      // Mobile
+      'mobile development': 'Mobile app development tutorial',
+      'ios development': 'iOS app development Swift',
+      'android development': 'Android app development tutorial',
+      
+      // DevOps
+      'docker': 'Docker containerization tutorial',
+      'kubernetes': 'Kubernetes explained',
+      'aws': 'AWS cloud computing basics',
+      
+      // Database
+      'sql': 'SQL database tutorial',
+      'database design': 'Database design fundamentals',
+      'mongodb': 'MongoDB NoSQL tutorial',
+      
+      // Cybersecurity
+      'cybersecurity': 'Cybersecurity fundamentals',
+      'encryption': 'Encryption and cryptography explained',
+      'network security': 'Network security basics',
+      
+      // UI/UX
+      'ui design': 'UI design principles tutorial',
+      'ux design': 'UX design fundamentals',
+      'design thinking': 'Design thinking process'
+    };
+    
+    // Find the best match or use the topic directly
+    for (const [key, video] of Object.entries(videoMappings)) {
+      if (topic.toLowerCase().includes(key)) {
+        return video;
+      }
+    }
+    return `${topic} tutorial explained`;
+  }
+
+  getTechnicalDocumentation(topic) {
+    const docMappings = {
+      // Programming Languages
+      'javascript': 'Check MDN Web Docs for JavaScript reference',
+      'python': 'Refer to Python official documentation',
+      'java': 'Check Oracle Java documentation',
+      'c#': 'Refer to Microsoft C# documentation',
+      'typescript': 'Check TypeScript handbook',
+      
+      // Web Development
+      'react': 'Check React official documentation',
+      'vue': 'Refer to Vue.js official guide',
+      'angular': 'Check Angular official documentation',
+      'node': 'Refer to Node.js documentation',
+      'html': 'Check MDN HTML reference',
+      'css': 'Refer to MDN CSS documentation',
+      
+      // Data Science
+      'machine learning': 'Check scikit-learn documentation',
+      'pandas': 'Refer to pandas official documentation',
+      'numpy': 'Check NumPy documentation',
+      'tensorflow': 'Refer to TensorFlow documentation',
+      
+      // Game Development
+      'unity': 'Check Unity official documentation and scripting API',
+      'unreal': 'Refer to Unreal Engine documentation',
+      
+      // Mobile Development
+      'ios': 'Check Apple Developer documentation',
+      'android': 'Refer to Android Developer guides',
+      'flutter': 'Check Flutter documentation',
+      
+      // Database
+      'sql': 'Refer to W3Schools SQL tutorial or database vendor docs',
+      'mongodb': 'Check MongoDB official documentation',
+      'postgresql': 'Refer to PostgreSQL documentation',
+      
+      // DevOps & Cloud
+      'docker': 'Check Docker official documentation',
+      'kubernetes': 'Refer to Kubernetes documentation',
+      'aws': 'Check AWS documentation',
+      'azure': 'Refer to Microsoft Azure documentation',
+      
+      // General Programming
+      'algorithms': 'Check algorithm visualization sites like VisuAlgo',
+      'data structures': 'Refer to computer science textbooks and online courses'
+    };
+    
+    for (const [key, doc] of Object.entries(docMappings)) {
+      if (topic.toLowerCase().includes(key)) {
+        return doc;
+      }
+    }
+    return 'Check the relevant official documentation and community resources';
+  }
+
+  detectTechnicalContext(userQuestion, pageContent, prioritizedContent) {
+    const technicalIndicators = [
+      // Programming languages
+      'javascript', 'python', 'java', 'c#', 'c++', 'typescript', 'php', 'ruby', 'go', 'rust', 'swift', 'kotlin',
+      // Web technologies
+      'html', 'css', 'react', 'vue', 'angular', 'node.js', 'express', 'api', 'rest', 'graphql', 'json',
+      // Development concepts
+      'function', 'variable', 'object', 'class', 'method', 'algorithm', 'database', 'server', 'frontend', 'backend',
+      // Game development
+      'unity', 'unreal', 'game', 'gameobject', 'physics', 'animation', 'shader', 'rendering', 'collision',
+      // VR/AR
+      'vr', 'ar', 'xr', 'virtual reality', 'augmented reality', 'dof', 'tracking', 'immersive',
+      // Data science
+      'machine learning', 'ai', 'neural network', 'data analysis', 'pandas', 'numpy', 'tensorflow',
+      // Mobile development
+      'ios', 'android', 'flutter', 'react native', 'mobile app',
+      // DevOps
+      'docker', 'kubernetes', 'aws', 'azure', 'deployment', 'ci/cd', 'cloud'
+    ];
+
+    const questionLower = userQuestion.toLowerCase();
+    const pageText = pageContent.text ? pageContent.text.join(' ').toLowerCase() : '';
+    const pageTitle = pageContent.title ? pageContent.title.toLowerCase() : '';
+    
+    // Check user question for technical terms
+    const questionHasTech = technicalIndicators.some(term => questionLower.includes(term));
+    
+    // Check page content for technical terms
+    const pageHasTech = technicalIndicators.some(term => 
+      pageText.includes(term) || pageTitle.includes(term)
+    );
+    
+    // Check prioritized content if available
+    let prioritizedHasTech = false;
+    if (prioritizedContent) {
+      const prioritizedText = prioritizedContent.highPriority?.text
+        ?.map(t => t.text)
+        ?.join(' ')
+        ?.toLowerCase() || '';
+      prioritizedHasTech = technicalIndicators.some(term => prioritizedText.includes(term));
+    }
+    
+    return questionHasTech || pageHasTech || prioritizedHasTech;
+  }
+
+  identifyTechnicalDomain(userQuestion, pageContent) {
+    const domains = {
+      'Web Development': ['html', 'css', 'javascript', 'react', 'vue', 'angular', 'node.js', 'frontend', 'backend', 'api'],
+      'Game Development': ['unity', 'unreal', 'game', 'gameobject', 'physics', 'animation', 'rendering'],
+      'VR/AR Development': ['vr', 'ar', 'xr', 'virtual reality', 'augmented reality', 'immersive', 'tracking'],
+      'Data Science': ['machine learning', 'ai', 'data analysis', 'pandas', 'numpy', 'tensorflow', 'neural network'],
+      'Mobile Development': ['ios', 'android', 'flutter', 'react native', 'mobile app', 'swift', 'kotlin'],
+      'Programming': ['python', 'java', 'c#', 'c++', 'algorithm', 'function', 'variable', 'object', 'class'],
+      'DevOps': ['docker', 'kubernetes', 'aws', 'azure', 'deployment', 'ci/cd', 'cloud', 'server']
+    };
+
+    const combinedText = (userQuestion + ' ' + 
+      (pageContent.title || '') + ' ' + 
+      (pageContent.text ? pageContent.text.join(' ') : '')).toLowerCase();
+
+    for (const [domain, keywords] of Object.entries(domains)) {
+      if (keywords.some(keyword => combinedText.includes(keyword))) {
+        return domain;
+      }
+    }
+
+    return null;
+  }
   
   prepareGeminiPrompt(userQuestion, pageContent, platform, prioritizedContent = null, relevantVisibleContent = null) {
-    // Create a well-structured prompt for the Gemini API with viewport awareness
+    // Detect technical development context and domain
+    const isTechnicalContext = this.detectTechnicalContext(userQuestion, pageContent, prioritizedContent);
+    const technicalDomain = this.identifyTechnicalDomain(userQuestion, pageContent);
+    
+    // Create a well-structured prompt for the Gemini API with enhanced technical awareness
     let prompt = `You are Kana, a friendly AI learning assistant that helps students understand concepts and develop problem-solving skills.
 
 CONTEXT:
 Platform: ${platform}
 Page: ${pageContent.title || 'Learning content'}
 Student Question: "${userQuestion}"`;
+
+    // Add technical domain context
+    if (technicalDomain) {
+      prompt += `
+Technical Domain: ${technicalDomain}`;
+    }
+
+    // Add specialized technical context if detected
+    if (isTechnicalContext) {
+      prompt += `
+
+TECHNICAL DEVELOPMENT CONTEXT DETECTED:
+- This appears to be a technical development question
+- Technical domains may include: Programming, Web Dev, Game Dev, VR/AR, Data Science, Mobile Dev, DevOps, etc.
+- Common technical terms: API, framework, library, algorithm, database, deployment, etc.
+- VR/AR terms: DOF (Degrees of Freedom), immersive, spatial computing, tracking
+- Game dev terms: GameObject, physics, rendering, collision, animation
+- Web dev terms: frontend, backend, responsive design, REST API, database
+- Programming terms: object-oriented, algorithm, data structure, debugging
+- Focus on practical, domain-specific guidance and best practices`;
+    }
 
     // Add conversation context for follow-up questions
     if (this.conversationContext.previousQuestions.length > 0) {
@@ -2506,6 +3128,15 @@ All Page Topics: ${pageContent.headings.slice(0, 5).join(', ')}`;
 
     prompt += `
 
+CRITICAL LINK RULES - READ CAREFULLY:
+🚫 NEVER WRITE: [Unity Input System Documentation](fake-url)
+🚫 NEVER WRITE: [Unity Raycasting Documentation](invalid-link) 
+🚫 NEVER WRITE: [C# static variables](placeholder-url)
+✅ INSTEAD WRITE: "Check Unity's Input System documentation"
+✅ INSTEAD WRITE: "Look up Unity Raycasting in the official docs"
+✅ INSTEAD WRITE: "Search for C# static variables in Microsoft docs"
+✅ FOR VIDEOS USE: {{YOUTUBE_SEARCH:Unity raycasting tutorial}}
+
 GUIDELINES FOR RESPONSE:
 - CRITICAL: The student is asking about what they can currently see on their screen
 - Look at the "Current Section" and "Other Visible Sections" to understand exactly where they are
@@ -2517,14 +3148,52 @@ GUIDELINES FOR RESPONSE:
 - Help them understand the concepts without giving direct answers
 - Use encouraging, supportive language
 - Respond naturally as a conversational AI - format your response however makes most sense
-- Include relevant educational resources formatted as working links: [Title](URL)
-- No need for rigid structure - respond naturally and helpfully
-- If they ask a follow-up, remember the previous conversation context
+- IMPORTANT: Proactively include educational videos and resources for most topics using {{YOUTUBE_SEARCH:topic}}
+- Be generous with learning materials - students benefit from multiple resources
+- Include relevant educational resources using well-known, reliable sites like official documentation, Khan Academy, or established educational platforms
+
+CRITICAL LINK RULES - FOLLOW EXACTLY:
+- NEVER EVER create fake links in the format [Text](fake-url) or [Text](non-working-link)
+- NEVER make up YouTube video URLs or IDs - they will be 404 errors and frustrate users
+- NEVER create clickable links unless you are 100% certain they exist and work
+- DO NOT write things like "[Unity Input System Documentation](fake-link)" - this doesn't work!
+- DO NOT write things like "[Unity Raycasting Documentation](non-working-url)" - this doesn't work!
+- INSTEAD of fake links, write: "Check the Unity Input System documentation" or "Look up Unity Raycasting in the official docs"
+- For YouTube videos, ONLY use this format: {{YOUTUBE_SEARCH:search_term}}
+- Example: {{YOUTUBE_SEARCH:Unity raycasting tutorial}} will find real videos
+- Example: {{YOUTUBE_SEARCH:C# static variables explained}} will find real videos  
+- The system will automatically replace {{YOUTUBE_SEARCH:term}} patterns with real, working YouTube videos
+- Use established educational platforms: Unity Learn, MDN Web Docs, W3Schools, Khan Academy, Coursera, etc.
+- Write "Search Unity Learn for..." instead of "[Unity Learn](fake-url)"
+- Write "Look up on Stack Overflow..." instead of "[Stack Overflow](fake-url)"
 
 RESPONSE APPROACH:
-Respond naturally as yourself - no forced formatting or sections. Just be helpful, contextual, and educational. Include working resource links where relevant using [Title](URL) format.
+Provide helpful educational guidance focused on the current screen content. IMPORTANT: For most concepts and topics, include relevant educational videos and resources to enhance learning:
 
-Focus entirely on what they're currently viewing on their screen and provide specific, helpful guidance for that exact content.`;
+WHEN TO INCLUDE VIDEOS AND RESOURCES:
+- For programming concepts (use {{YOUTUBE_SEARCH:specific_programming_concept}})
+- For technical tutorials (use {{YOUTUBE_SEARCH:step_by_step_tutorial}})
+- For mathematical concepts (use {{YOUTUBE_SEARCH:math_concept_explained}})
+- For science topics (use {{YOUTUBE_SEARCH:science_topic_tutorial}})
+- For design principles (use {{YOUTUBE_SEARCH:design_concept_guide}})
+- For any complex topic that benefits from visual learning
+- When explaining "how" something works
+- When breaking down difficult concepts
+
+EXAMPLES OF GOOD VIDEO SEARCHES:
+- {{YOUTUBE_SEARCH:Unity C# scripting basics}}
+- {{YOUTUBE_SEARCH:object oriented programming explained}}
+- {{YOUTUBE_SEARCH:Unity raycasting tutorial}}
+- {{YOUTUBE_SEARCH:JavaScript functions beginner guide}}
+- {{YOUTUBE_SEARCH:CSS flexbox layout tutorial}}
+
+ADDITIONAL RESOURCES TO MENTION:
+- Official documentation (Unity Learn, MDN, Microsoft Docs)
+- Educational platforms (Khan Academy, Coursera, freeCodeCamp)
+- Practice sites (Codecademy, LeetCode for coding)
+- Community resources (Stack Overflow, Reddit communities)
+
+Be generous with educational resources - students learn better with multiple learning materials. Focus entirely on what they're currently viewing on their screen and provide specific, helpful guidance for that exact content with comprehensive educational support.`;
 
     return prompt;
   }
@@ -2576,7 +3245,7 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     }
   }
   
-  parseGeminiResponse(aiResponseText, questionContext) {
+  async parseGeminiResponse(aiResponseText, questionContext) {
     try {
       // Remove markdown code blocks if present
       let cleanedResponse = aiResponseText.trim();
@@ -2585,6 +3254,122 @@ Focus entirely on what they're currently viewing on their screen and provide spe
       } else if (cleanedResponse.startsWith('```')) {
         cleanedResponse = cleanedResponse.replace(/^```\s*/g, '').replace(/\s*```$/g, '');
       }
+      
+      // PROCESS YOUTUBE SEARCH REQUESTS
+      const youtubeSearchPattern = /\{\{YOUTUBE_SEARCH:([^}]+)\}\}/g;
+      const searchRequests = [];
+      let match;
+      
+      // Find all YouTube search requests
+      while ((match = youtubeSearchPattern.exec(cleanedResponse)) !== null) {
+        searchRequests.push({
+          fullMatch: match[0],
+          searchTerm: match[1].trim()
+        });
+      }
+      
+      // Process YouTube searches if found
+      if (searchRequests.length > 0) {
+        this.log(`Found ${searchRequests.length} YouTube search requests`);
+        
+        for (const request of searchRequests) {
+          try {
+            // Use the Live YouTube Searcher to get real videos
+            let videos = [];
+            
+            if (this.liveYouTubeSearcher) {
+              this.log(`Searching YouTube for: "${request.searchTerm}"`);
+              videos = await this.liveYouTubeSearcher.searchEducationalVideos(request.searchTerm, 1);
+            }
+            
+            // Fallback to static database if no live results
+            if (!videos || videos.length === 0) {
+              this.log(`No live results, checking static database for: "${request.searchTerm}"`);
+              videos = this.realYouTubeFinder ? this.realYouTubeFinder.findRealVideos(request.searchTerm, 1) : [];
+            }
+            
+            // Replace the search request with real video link
+            if (videos && videos.length > 0) {
+              const video = videos[0];
+              
+              // Debug: Log the video object structure
+              this.log(`Video object received:`, 'debug');
+              console.log('Video object:', video);
+              
+              // Normalize video ID - handle both 'id' and 'videoId' properties
+              const videoId = video.id || video.videoId;
+              const videoTitle = video.title;
+              
+              // Validate video object has required properties and that videoId is not undefined
+              if (video && videoId && videoId !== 'undefined' && videoTitle) {
+                const videoLink = `[${videoTitle}](https://www.youtube.com/watch?v=${videoId})`;
+                cleanedResponse = cleanedResponse.replace(request.fullMatch, videoLink);
+                this.log(`✅ Replaced search with real video: ${videoTitle} (ID: ${videoId})`);
+              } else {
+                this.log(`❌ Invalid video object - missing id/videoId or title. Object:`, 'error');
+                console.error('Invalid video object:', video);
+                
+                // Fallback to search suggestion if video object is malformed
+                cleanedResponse = cleanedResponse.replace(
+                  request.fullMatch, 
+                  `Search YouTube for "${request.searchTerm}" for visual tutorials`
+                );
+                this.log(`🔄 Used fallback search suggestion for: "${request.searchTerm}"`);
+              }
+            } else {
+              // Replace with search suggestion if no videos found
+              cleanedResponse = cleanedResponse.replace(
+                request.fullMatch, 
+                `Search YouTube for "${request.searchTerm}" for visual tutorials`
+              );
+              this.log(`❌ No videos found for: "${request.searchTerm}"`);
+            }
+          } catch (error) {
+            this.log(`Error processing YouTube search for "${request.searchTerm}": ${error.message}`, 'error');
+            // Replace with search suggestion on error
+            cleanedResponse = cleanedResponse.replace(
+              request.fullMatch, 
+              `Search YouTube for "${request.searchTerm}" for tutorials`
+            );
+          }
+        }
+      }
+      
+      // CLEAN UP FAKE LINKS - Remove any invalid markdown links
+      // Pattern to match [text](invalid-url) where invalid-url is not a real URL
+      const fakeLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+      const foundLinks = [];
+      let linkMatch;
+      
+      // First, collect all links
+      while ((linkMatch = fakeLinkPattern.exec(cleanedResponse)) !== null) {
+        foundLinks.push({
+          fullMatch: linkMatch[0],
+          text: linkMatch[1],
+          url: linkMatch[2]
+        });
+      }
+      
+      // Then process each link
+      foundLinks.forEach(link => {
+        // Check if it's a valid URL - be very strict
+        const isValidUrl = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]\//.test(link.url) || 
+                          /^www\.[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]/.test(link.url);
+        
+        // Common fake URL patterns to catch
+        const isFakeUrl = /^(fake|non-working|invalid|placeholder|example|test|dummy)-?(url|link)$/i.test(link.url) ||
+                         /^(url|link|href|src)$/i.test(link.url) ||
+                         link.url.includes('fake') ||
+                         link.url.includes('placeholder') ||
+                         link.url.length < 5;
+        
+        // If it's not a valid URL or is clearly fake, convert to plain text suggestion
+        if (!isValidUrl || isFakeUrl) {
+          const replacement = `Search for "${link.text}" in documentation or tutorials`;
+          cleanedResponse = cleanedResponse.replace(link.fullMatch, replacement);
+          this.log(`🧹 Cleaned up fake link: [${link.text}](${link.url})`);
+        }
+      });
       
       // Check if the response is in JSON format (legacy support)
       if (cleanedResponse.startsWith('{')) {
@@ -3028,9 +3813,190 @@ Focus entirely on what they're currently viewing on their screen and provide spe
       
       responseContent.innerHTML = html;
       
+      // Check for YouTube videos in the response and open them in PiP
+      this.handleYouTubeVideosInResponse(response.content || response.title || '');
+      
       // Scroll to top of response
       responseContent.scrollTop = 0;
     }
+  }
+
+  // Handle YouTube videos found in Kana's response
+  async handleYouTubeVideosInResponse(response) {
+    try {
+      if (this.youtubePiP && typeof response === 'string') {
+        // Check if response contains YouTube links or educational content
+        const hasYouTubeLinks = /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed)/i.test(response);
+        
+        if (hasYouTubeLinks) {
+          this.log('YouTube videos detected in response, validating before opening PiP...');
+          
+          // Use URL validator if available to pre-validate URLs
+          if (this.urlValidator) {
+            // Extract YouTube URLs from response
+            const youtubeUrls = response.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/g);
+            
+            if (youtubeUrls && youtubeUrls.length > 0) {
+              // Log what we're about to validate for debugging
+              this.log(`Found ${youtubeUrls.length} YouTube URLs to validate: ${youtubeUrls.map(url => url.substring(url.length - 15)).join(', ')}`);
+              
+              // Validate URLs before attempting to open
+              const validatedUrls = await this.urlValidator.filterValidYouTubeUrls(youtubeUrls);
+              
+              if (validatedUrls.length > 0) {
+                this.log(`Opening ${validatedUrls.length} validated YouTube videos in PiP...`);
+                
+                // Small delay to let the response render first
+                setTimeout(() => {
+                  // Pass validated URLs directly to avoid re-validation
+                  this.youtubePiP.openValidatedYouTubeVideos(validatedUrls);
+                }, 500);
+              } else {
+                // Check if AI response contains YouTube search patterns before falling back
+                const hasYouTubeSearchPatterns = /\{\{YOUTUBE_SEARCH:[^}]+\}\}/g.test(response);
+                
+                if (!hasYouTubeSearchPatterns) {
+                  this.log('No valid YouTube videos found after validation and no search patterns - trying real video finder', 'warn');
+                  await this.findAndOpenRealVideos(response);
+                } else {
+                  this.log('AI response has search patterns but validation failed - search patterns should have been processed already');
+                }
+              }
+            }
+          } else {
+            // Fallback to original behavior if validator not available
+            setTimeout(() => {
+              this.youtubePiP.openYouTubeVideos(response);
+            }, 500);
+          }
+        } else {
+          // AI response will contain YouTube search patterns if videos are needed
+          // No fallback search required since AI handles video discovery
+          this.log('No YouTube URLs found in AI response - search patterns will be processed separately');
+        }
+      }
+    } catch (error) {
+      // Use error handler if available
+      if (this.errorHandler) {
+        await this.errorHandler.handleError(error, {
+          context: 'YOUTUBE_VIDEO_HANDLING',
+          response: response?.substring(0, 100)
+        });
+      } else {
+        this.log(`Error handling YouTube videos: ${error.message}`, 'error');
+      }
+    }
+  }
+
+  // Find and open real educational videos based on the conversation topic
+  async findAndOpenRealVideos(response) {
+    try {
+      // Extract educational topics from the response
+      const topics = this.extractEducationalTopics(response);
+      
+      if (topics.length === 0) {
+        this.log('No educational topics detected for video search');
+        return;
+      }
+
+      this.log(`Searching for real educational videos for topics: ${topics.join(', ')}`);
+      const primaryTopic = topics[0];
+      
+      let realVideos = [];
+
+      // Priority 1: Try Live YouTube Search (real API search)
+      if (this.liveYouTubeSearcher) {
+        try {
+          this.log(`Attempting LIVE YouTube search for: ${primaryTopic}`);
+          realVideos = await this.liveYouTubeSearcher.searchEducationalVideos(primaryTopic, 3);
+          
+          if (realVideos.length > 0) {
+            this.log(`✅ LIVE search found ${realVideos.length} real videos for: ${primaryTopic}`);
+          } else {
+            this.log(`⚠️ LIVE search found no videos for: ${primaryTopic}`);
+          }
+        } catch (error) {
+          this.log(`❌ LIVE search failed: ${error.message}`, 'warn');
+        }
+      }
+
+      // Priority 2: Fallback to Static Database if live search didn't find enough
+      if (realVideos.length === 0 && this.realYouTubeFinder) {
+        this.log(`Falling back to static database for: ${primaryTopic}`);
+        const staticVideos = await this.realYouTubeFinder.findRealVideos(primaryTopic, 2);
+        
+        if (staticVideos.length > 0) {
+          realVideos = staticVideos;
+          this.log(`📚 Static database found ${realVideos.length} videos for: ${primaryTopic}`);
+        }
+      }
+
+      // Open videos in PiP if found
+      if (realVideos.length > 0) {
+        this.log(`🎥 Opening ${realVideos.length} educational videos in PiP`);
+        
+        // Pass video objects directly to PiP manager (don't convert to URLs)
+        setTimeout(() => {
+          this.youtubePiP.openValidatedYouTubeVideos(realVideos);
+        }, 500);
+      } else {
+        this.log(`❌ No educational videos found for topic: ${primaryTopic}`);
+      }
+    } catch (error) {
+      this.log(`Error finding real videos: ${error.message}`, 'error');
+    }
+  }
+
+  // Extract educational topics from response text
+  extractEducationalTopics(text) {
+    const topics = [];
+    const textLower = text.toLowerCase();
+
+    // Define topic patterns and their corresponding search terms
+    const topicPatterns = {
+      'unity prefabs': /prefab|reusable.*object|instantiat.*object/i,
+      'unity ui': /ui|user.*interface|canvas|button.*ui|menu/i,
+      'unity scripting': /script|c#|coding|programming.*unity|unity.*code/i,
+      'unity buttons': /button|click|ui.*button|onclick|button.*event/i,
+      'unity gameobjects': /gameobject|game.*object|unity.*object|hierarchy/i,
+      'unity physics': /physics|rigidbody|collider|collision|force/i,
+      'programming basics': /programming.*basic|learn.*programming|code.*beginner|javascript|python|c\+\+/i,
+      'game development': /game.*dev|making.*game|create.*game|game.*design/i,
+      'web development': /web.*dev|html|css|react|vue|angular|node/i,
+      'data science': /data.*science|machine.*learning|ai|pandas|numpy/i,
+      'software engineering': /software.*eng|algorithms|data.*structures|design.*patterns/i
+    };
+
+    // Check for topic matches
+    for (const [topic, pattern] of Object.entries(topicPatterns)) {
+      if (pattern.test(textLower)) {
+        topics.push(topic);
+      }
+    }
+
+    // Extract technology/topic keywords from text for broader coverage
+    const techKeywords = textLower.match(/\b(unity|react|javascript|python|java|c#|html|css|sql|mongodb|docker|kubernetes|aws|azure|firebase|nodejs|express|django|flask|spring|angular|vue|svelte|typescript|php|ruby|go|rust|swift|kotlin|flutter|xamarin|ionic|cordova|webpack|babel|jest|cypress|selenium|git|github|linux|windows|macos|android|ios)\b/gi);
+    
+    if (techKeywords) {
+      // Add unique tech keywords as topics
+      const uniqueTechTopics = [...new Set(techKeywords.map(kw => kw.toLowerCase()))];
+      topics.push(...uniqueTechTopics);
+    }
+
+    // Filter out non-educational terms
+    const nonEducationalTerms = /^(hey|hi|hello|thanks|ok|yes|no|the|and|or|but|if|when|where|how|what|why)$/i;
+    const educationalTopics = topics.filter(topic => !nonEducationalTerms.test(topic));
+
+    // Also extract from current conversation context
+    if (this.conversationContext && this.conversationContext.currentTopic) {
+      const currentTopic = this.conversationContext.currentTopic.toLowerCase();
+      if (!nonEducationalTerms.test(currentTopic) && 
+          !educationalTopics.some(topic => topic.includes(currentTopic))) {
+        educationalTopics.unshift(this.conversationContext.currentTopic); // Add as primary topic
+      }
+    }
+
+    return educationalTopics.slice(0, 3); // Limit to top 3 topics
   }
   
   showError(message) {
@@ -3210,17 +4176,147 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     }
   }
   
-  sendChatMessage() {
-    const chatInput = this.chatPanel.querySelector('.kana-chat-input');
-    const message = chatInput.value.trim();
+  handleStudyPouchCommand(message) {
+    const lowerMessage = message.toLowerCase().trim();
     
-    if (message) {
-      console.log('Sending chat message:', message);
-      chatInput.value = '';
+    // Define command patterns and corresponding component types
+    const commandMap = {
+      // Notes/Notepad commands
+      'open notepad': 'notepad',
+      'open notes': 'notepad',
+      'show notepad': 'notepad',
+      'show notes': 'notepad',
+      'create notes': 'notepad',
+      'new notes': 'notepad',
       
-      // Process the message
-      this.analyzeScreenContent(message);
+      // Pomodoro timer commands
+      'open pomodoro': 'pomodoro',
+      'open timer': 'pomodoro',
+      'show pomodoro': 'pomodoro',
+      'show timer': 'pomodoro',
+      'start pomodoro': 'pomodoro',
+      'start timer': 'pomodoro',
+      
+      // Task tracker commands
+      'open tasks': 'task-tracker',
+      'open task tracker': 'task-tracker',
+      'show tasks': 'task-tracker',
+      'show task tracker': 'task-tracker',
+      'open todos': 'task-tracker',
+      'show todos': 'task-tracker',
+      
+      // Music player commands
+      'open music': 'music',
+      'show music': 'music',
+      'play music': 'music',
+      'music player': 'music',
+      
+      // Calculator commands
+      'open calculator': 'calculator',
+      'show calculator': 'calculator',
+      'open calc': 'calculator',
+      'show calc': 'calculator',
+      
+      // Video library commands
+      'open videos': 'video-library',
+      'show videos': 'video-library',
+      'open video library': 'video-library',
+      'show video library': 'video-library'
+    };
+    
+    // Check for exact command matches
+    for (const [command, componentType] of Object.entries(commandMap)) {
+      if (lowerMessage === command || lowerMessage.includes(command)) {
+        this.executeStudyPouchCommand(componentType, command);
+        return true; // Command was handled
+      }
     }
+    
+    // Check for general "open study pouch" command
+    if (lowerMessage.includes('open study pouch') || 
+        lowerMessage.includes('show study pouch') ||
+        lowerMessage.includes('open pouch') ||
+        lowerMessage.includes('show pouch')) {
+      this.executeStudyPouchCommand('pouch', 'open study pouch');
+      return true;
+    }
+    
+    return false; // No command found
+  }
+  
+  executeStudyPouchCommand(componentType, originalCommand) {
+    console.log(`Executing Study Pouch command: ${originalCommand} -> ${componentType}`);
+    
+    // Display confirmation message
+    this.showResponse(`
+      <div class="kana-ai-response">
+        <h3>🎒 Study Pouch Command</h3>
+        <p><strong>Command:</strong> "${originalCommand}"</p>
+        <p>Opening ${this.getComponentDisplayName(componentType)}...</p>
+      </div>
+    `);
+    
+    if (componentType === 'pouch') {
+      // Open the Study Pouch itself
+      if (this.studyPouch) {
+        this.studyPouch.show();
+      }
+    } else {
+      // Open specific component as standalone floating window
+      console.log(`About to call openComponentAsStandalone for: ${componentType}`);
+      console.log(`StudyPouchManager exists:`, !!this.studyPouch);
+      
+      if (this.studyPouch) {
+        try {
+          console.log(`Calling openComponentAsStandalone(${componentType})`);
+          const component = this.studyPouch.openComponentAsStandalone(componentType);
+          console.log(`openComponentAsStandalone returned:`, component);
+          
+          if (component) {
+            console.log(`✅ Opened ${componentType} component as standalone`);
+            this.showResponse(`
+              <div class="kana-ai-response">
+                <h3>🎒 Study Pouch Command</h3>
+                <p><strong>Command:</strong> "${originalCommand}"</p>
+                <p>✅ ${this.getComponentDisplayName(componentType)} opened successfully!</p>
+              </div>
+            `);
+          } else {
+            console.error(`❌ Failed to create ${componentType} component - method returned null/undefined`);
+            throw new Error(`Failed to create ${componentType} component`);
+          }
+        } catch (error) {
+          console.error(`❌ Error opening ${componentType} component:`, error);
+          this.showResponse(`
+            <div class="kana-ai-response">
+              <h3>⚠️ Component Error</h3>
+              <p>Sorry, I couldn't open the ${this.getComponentDisplayName(componentType)}. The component might not be available yet.</p>
+              <p><em>Try clicking the Study Pouch button (🎒) and selecting it manually.</em></p>
+            </div>
+          `);
+        }
+      } else {
+        this.showResponse(`
+          <div class="kana-ai-response">
+            <h3>⚠️ Study Pouch Unavailable</h3>
+            <p>The Study Pouch is not available right now. Please try again in a moment.</p>
+          </div>
+        `);
+      }
+    }
+  }
+  
+  getComponentDisplayName(componentType) {
+    const displayNames = {
+      'notepad': 'Study Notes',
+      'pomodoro': 'Pomodoro Timer',
+      'task-tracker': 'Task Tracker',
+      'music': 'Music Player',
+      'calculator': 'Calculator',
+      'video-library': 'Video Library',
+      'pouch': 'Study Pouch'
+    };
+    return displayNames[componentType] || componentType;
   }
   
   sendChatMessage() {
@@ -3231,7 +4327,12 @@ Focus entirely on what they're currently viewing on their screen and provide spe
       console.log('Sending chat message:', message);
       chatInput.value = '';
       
-      // Process the message
+      // Check for Study Pouch commands first
+      if (this.handleStudyPouchCommand(message)) {
+        return; // Command was handled, don't send to AI
+      }
+      
+      // Process the message with AI
       this.analyzeScreenContent(message);
     }
   }
@@ -3252,6 +4353,18 @@ Focus entirely on what they're currently viewing on their screen and provide spe
         Object.assign(this.glassSettings, request.glassSettings);
         this.applyGlassTheme();
         sendResponse({ result: 'glass theme updated' });
+      } else if (request.action === 'reloadGlassSettings') {
+        // Reload glass settings from storage
+        this.loadGlassSettings();
+        sendResponse({ result: 'glass settings reloaded' });
+      } else if (request.action === 'toggleStudyPouch') {
+        // Toggle Study Pouch visibility
+        if (this.studyPouch) {
+          this.studyPouch.toggle();
+          sendResponse({ result: 'study pouch toggled' });
+        } else {
+          sendResponse({ result: 'study pouch not available' });
+        }
       }
       
       // Return true to indicate we'll send a response asynchronously
@@ -3268,8 +4381,8 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     }
     
     // Update adaptive colors if setting changed
-    if (settings.useAdaptiveColors !== undefined) {
-      this.useAdaptiveColors = settings.useAdaptiveColors;
+    if (settings.kanaAdaptiveColors !== undefined) {
+      this.useAdaptiveColors = settings.kanaAdaptiveColors;
       this.useAdaptiveColors ? this.applyAdaptiveColors() : this.applyDefaultColors();
     }
     
@@ -3337,26 +4450,23 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     
     const mainColor = colors.main;
     
-    // Calculate contrasting text color (white or black)
-    const brightness = this.calculateColorBrightness(mainColor);
-    const textColor = brightness > 128 ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-    
     // Create complementary colors for better visual appeal
     const lightColor = this.lightenColor(mainColor, 0.3);
     const darkColor = this.darkenColor(mainColor, 0.2);
     
-    // Apply styles with enhanced glassmorphic effect
+    // Apply adaptive background and border to orb, but NEVER change the icon color
     orb.style.setProperty('--kana-adaptive-bg', 
       `linear-gradient(135deg, 
         rgba(${mainColor.r}, ${mainColor.g}, ${mainColor.b}, 0.4) 0%, 
         rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 0.2) 100%)`);
     orb.style.setProperty('--kana-adaptive-border', 
       `rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 0.6)`);
-    orb.style.setProperty('--kana-adaptive-text', textColor);
     orb.style.setProperty('--kana-adaptive-shadow', 
       `0 8px 32px rgba(${darkColor.r}, ${darkColor.g}, ${darkColor.b}, 0.3)`);
     
-    console.log('Applied adaptive colors to orb:', mainColor);
+    // IMPORTANT: Do NOT set --kana-adaptive-text for orb - let CSS keep icon white
+    
+    console.log('Applied adaptive colors to orb (keeping logo white):', mainColor);
   }
   
   adaptPanelBackground(colors) {
@@ -3368,9 +4478,21 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     
     const mainColor = colors.main;
     
-    // Calculate contrasting text color
+    // Improved contrast calculation for better readability
     const brightness = this.calculateColorBrightness(mainColor);
-    const textColor = brightness > 128 ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.9)';
+    
+    // More aggressive contrast - use darker text on light backgrounds, brighter text on dark backgrounds
+    let textColor;
+    if (brightness > 140) {
+      // Light background - use dark text with good contrast
+      textColor = 'rgba(20, 30, 40, 0.95)';
+    } else if (brightness > 100) {
+      // Medium brightness - use darker text
+      textColor = 'rgba(40, 50, 60, 0.9)';
+    } else {
+      // Dark background - use bright white text
+      textColor = 'rgba(255, 255, 255, 0.95)';
+    }
     
     // Create subtle variations
     const lightColor = this.lightenColor(mainColor, 0.4);
@@ -3387,27 +4509,67 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     panel.style.setProperty('--kana-adaptive-shadow', 
       `0 20px 60px rgba(${darkColor.r}, ${darkColor.g}, ${darkColor.b}, 0.2)`);
     
-    console.log('Applied adaptive colors to panel:', mainColor);
+    console.log(`Applied adaptive colors to panel - brightness: ${brightness}, text: ${textColor}:`, mainColor);
+    
+    // Update Study Pouch theme to match adaptive colors (throttled)
+    if (this.studyPouch && typeof this.studyPouch.updateTheme === 'function') {
+      // Throttle theme updates to prevent spam
+      if (!this.themeUpdateTimeout) {
+        this.themeUpdateTimeout = setTimeout(() => {
+          const currentTheme = this.glassSettings?.orbColor || 'blue';
+          console.log('🎨 Syncing Study Pouch theme to adaptive colors:', currentTheme);
+          this.studyPouch.updateTheme(currentTheme);
+          this.themeUpdateTimeout = null;
+        }, 100); // Reduced timeout for more responsive updates
+      }
+    }
   }
   
   sampleBackgroundColors() {
-    // Sample colors from the page background
+    // Sample colors from the page background more comprehensively
     const samples = [];
     
     // Add body background
-    samples.push(window.getComputedStyle(document.body).backgroundColor);
+    const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+    if (bodyBg && bodyBg !== 'rgba(0, 0, 0, 0)' && bodyBg !== 'transparent') {
+      samples.push(bodyBg);
+    }
     
-    // Add element background colors
+    // Add html background
+    const htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
+    if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') {
+      samples.push(htmlBg);
+    }
+    
+    // Add element background colors with priority order
     const elements = [
       'main', 'article', 'section', 'header', 'nav', 
-      '.content', '.main-content', '.page-content'
+      '.content', '.main-content', '.page-content', '.container',
+      '[class*="content"]', '[class*="main"]', '[class*="page"]'
     ];
     
     elements.forEach(selector => {
       const el = document.querySelector(selector);
       if (el) {
         const bg = window.getComputedStyle(el).backgroundColor;
-        if (bg) samples.push(bg);
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+          samples.push(bg);
+        }
+      }
+    });
+    
+    // Get colors from largest visible elements
+    const largeElements = Array.from(document.querySelectorAll('div, section, main, article'))
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 200 && rect.height > 100;
+      })
+      .slice(0, 5);
+    
+    largeElements.forEach(el => {
+      const bg = window.getComputedStyle(el).backgroundColor;
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        samples.push(bg);
       }
     });
     
@@ -3416,12 +4578,14 @@ Focus entirely on what they're currently viewing on their screen and provide spe
       return { main: { r: 100, g: 150, b: 220, a: 1 } };
     }
     
-    // Find the most suitable color (one that's not white/black)
+    // Find the most suitable color (avoid pure white/black/transparent)
     for (const sample of samples) {
       const color = this.parseColor(sample);
       if (color) {
         const brightness = this.calculateColorBrightness(color);
-        if (brightness > 30 && brightness < 230) {
+        // Look for colors that aren't too extreme
+        if (brightness > 40 && brightness < 240) {
+          console.log(`Selected color with brightness ${brightness}:`, color);
           return { main: color };
         }
       }
@@ -3431,11 +4595,13 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     for (const sample of samples) {
       const color = this.parseColor(sample);
       if (color) {
+        console.log('Using fallback color:', color);
         return { main: color };
       }
     }
     
     // Ultimate fallback
+    console.log('Using ultimate fallback color');
     return { main: { r: 100, g: 150, b: 220, a: 1 } };
   }
   
@@ -3651,11 +4817,23 @@ Focus entirely on what they're currently viewing on their screen and provide spe
     return insights.slice(0, 3); // Return max 3 insights
   }
 
+  // Method to manually trigger YouTube video opening (for voice commands)
+  openYouTubeVideosFromText(text) {
+    if (this.youtubePiP) {
+      this.youtubePiP.openYouTubeVideos(text);
+    } else {
+      this.log('YouTube PiP Manager not available', 'warn');
+    }
+  }
+
   // ...existing code...
 }
 
 // Initialize the assistant when the content script loads
 const kanaAssistant = new KanaAssistant();
+
+// Make it globally available for voice enhancement
+window.kanaAssistant = kanaAssistant;
 
 // Export for testing
 if (typeof module !== 'undefined') {

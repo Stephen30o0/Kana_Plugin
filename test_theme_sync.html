@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Pouch Theme Sync Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .test-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 6px;
+            background: #007acc;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005999;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Study Pouch Theme Sync Test</h1>
+    
+    <div class="test-panel">
+        <h3>Theme Testing</h3>
+        <p>Open the browser console and click the buttons below to test theme synchronization:</p>
+        
+        <button onclick="testThemeSync()">Test Theme Sync</button>
+        <button onclick="changeTheme('green')">Switch to Green</button>
+        <button onclick="changeTheme('purple')">Switch to Purple</button>
+        <button onclick="changeTheme('blue')">Switch to Blue</button>
+        <button onclick="inspectStudyPouch()">Inspect Study Pouch</button>
+        
+        <div id="status" class="status">
+            Ready to test - open console to see results
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+            console.log('Test Status:', message);
+        }
+
+        function testThemeSync() {
+            console.log('=== Theme Sync Test ===');
+            
+            // Check if Kana is available
+            if (typeof window.kana !== 'undefined' && window.kana.studyPouch) {
+                console.log('✅ Study Pouch Manager found');
+                console.log('Current theme:', window.kana.studyPouch.currentTheme);
+                console.log('Glass themes available:', window.glassThemes);
+                
+                updateStatus('Study Pouch found - check console for details');
+            } else {
+                console.log('❌ Study Pouch Manager not found');
+                updateStatus('Study Pouch not found - make sure extension is loaded');
+            }
+        }
+
+        function changeTheme(themeName) {
+            console.log(`=== Changing Theme to ${themeName} ===`);
+            
+            if (typeof window.kana !== 'undefined' && window.kana.studyPouch) {
+                // Simulate theme change like the main extension would do
+                window.kana.studyPouch.updateTheme(themeName);
+                console.log(`Theme changed to: ${themeName}`);
+                updateStatus(`Theme changed to ${themeName} - check Study Pouch appearance`);
+            } else {
+                console.log('❌ Cannot change theme - Study Pouch not available');
+                updateStatus('Cannot change theme - Study Pouch not available');
+            }
+        }
+
+        function inspectStudyPouch() {
+            console.log('=== Study Pouch Inspection ===');
+            
+            if (typeof window.kana !== 'undefined' && window.kana.studyPouch) {
+                const pouch = window.kana.studyPouch;
+                console.log('Study Pouch Manager:', pouch);
+                console.log('Container:', pouch.container);
+                console.log('Components:', pouch.components);
+                console.log('Current theme:', pouch.currentTheme);
+                console.log('Is visible:', pouch.isVisible);
+                
+                if (pouch.container) {
+                    const styles = window.getComputedStyle(pouch.container);
+                    console.log('Container CSS Variables:');
+                    console.log('  --theme-primary:', pouch.container.style.getPropertyValue('--theme-primary'));
+                    console.log('  --theme-secondary:', pouch.container.style.getPropertyValue('--theme-secondary'));
+                    console.log('  --theme-accent:', pouch.container.style.getPropertyValue('--theme-accent'));
+                    console.log('  --theme-text:', pouch.container.style.getPropertyValue('--theme-text'));
+                    console.log('Background:', styles.background);
+                    console.log('Border color:', styles.borderColor);
+                }
+                
+                updateStatus('Study Pouch inspection complete - check console');
+            } else {
+                console.log('❌ Study Pouch not available for inspection');
+                updateStatus('Study Pouch not available for inspection');
+            }
+        }
+
+        // Auto-run basic test when page loads
+        setTimeout(() => {
+            testThemeSync();
+        }, 2000);
+    </script>
+</body>
+</html>

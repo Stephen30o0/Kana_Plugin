@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Pouch Theme & Orb Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .test-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 6px;
+            background: #007acc;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005999;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+        }
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Study Pouch & Orb Test</h1>
+    
+    <div class="test-panel">
+        <h3>Orb Visibility Test</h3>
+        <p>Check if the Kana orb is visible and properly positioned:</p>
+        
+        <button onclick="checkOrbVisibility()">Check Orb Visibility</button>
+        <button onclick="toggleConsole()">Toggle Console</button>
+        
+        <div id="orb-status" class="status">
+            Ready to test - click button to check orb visibility
+        </div>
+        
+        <div id="orb-debug" class="debug-info"></div>
+    </div>
+
+    <div class="test-panel">
+        <h3>Theme Sync Test</h3>
+        <p>Test theme synchronization for Study Pouch and components:</p>
+        
+        <button onclick="testThemeSync()">Test Theme Sync</button>
+        <button onclick="changeTheme('green')">Switch to Green</button>
+        <button onclick="changeTheme('purple')">Switch to Purple</button>
+        <button onclick="changeTheme('blue')">Switch to Blue</button>
+        <button onclick="inspectComponents()">Inspect Components</button>
+        
+        <div id="theme-status" class="status">
+            Ready to test - open console to see detailed results
+        </div>
+        
+        <div id="theme-debug" class="debug-info"></div>
+    </div>
+
+    <script>
+        function updateStatus(elementId, message) {
+            document.getElementById(elementId).textContent = message;
+            console.log(`${elementId}:`, message);
+        }
+
+        function updateDebug(elementId, info) {
+            document.getElementById(elementId).textContent = info;
+        }
+
+        function checkOrbVisibility() {
+            console.log('=== Orb Visibility Test ===');
+            
+            const orbContainer = document.querySelector('.kana-orb-container');
+            if (orbContainer) {
+                const styles = window.getComputedStyle(orbContainer);
+                const rect = orbContainer.getBoundingClientRect();
+                
+                const info = `Orb Found!
+Position: ${orbContainer.style.right} from right, ${orbContainer.style.top} from top
+Computed Styles:
+  Display: ${styles.display}
+  Visibility: ${styles.visibility}
+  Opacity: ${styles.opacity}
+  Z-index: ${styles.zIndex}
+  Position: ${styles.position}
+Bounding Rect:
+  Left: ${rect.left}px
+  Top: ${rect.top}px
+  Width: ${rect.width}px
+  Height: ${rect.height}px
+  InView: ${rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight}`;
+                
+                updateStatus('orb-status', 'Orb found and analyzed - check debug info below');
+                updateDebug('orb-debug', info);
+                console.log('Orb element:', orbContainer);
+                console.log('Orb info:', info);
+            } else {
+                updateStatus('orb-status', 'Orb NOT found - extension may not be loaded');
+                updateDebug('orb-debug', 'No .kana-orb-container element found in DOM');
+                console.log('❌ Orb container not found');
+            }
+        }
+
+        function toggleConsole() {
+            // This simulates what happens when user opens/closes console
+            console.log('Console toggle simulation - checking if orb disappears');
+            setTimeout(() => {
+                checkOrbVisibility();
+            }, 100);
+        }
+
+        function testThemeSync() {
+            console.log('=== Theme Sync Test ===');
+            
+            if (typeof window.kana !== 'undefined' && window.kana.studyPouch) {
+                const pouch = window.kana.studyPouch;
+                console.log('✅ Study Pouch found');
+                console.log('Current theme:', pouch.currentTheme);
+                console.log('Available themes:', Object.keys(window.glassThemes || {}));
+                
+                const info = `Study Pouch Found!
+Current Theme: ${pouch.currentTheme}
+Components Count: ${pouch.components.size}
+Container Element: ${pouch.container ? 'Found' : 'Missing'}
+Available Themes: ${Object.keys(window.glassThemes || {}).join(', ')}`;
+                
+                updateStatus('theme-status', 'Study Pouch found - check debug info');
+                updateDebug('theme-debug', info);
+            } else {
+                updateStatus('theme-status', 'Study Pouch not found - extension may not be loaded');
+                updateDebug('theme-debug', 'window.kana.studyPouch is not available');
+                console.log('❌ Study Pouch not found');
+            }
+        }
+
+        function changeTheme(themeName) {
+            console.log(`=== Changing Theme to ${themeName} ===`);
+            
+            if (typeof window.kana !== 'undefined' && window.kana.studyPouch) {
+                window.kana.studyPouch.updateTheme(themeName);
+                console.log(`Theme changed to: ${themeName}`);
+                updateStatus('theme-status', `Theme changed to ${themeName} - check components`);
+                
+                // Check if standalone components got the theme
+                setTimeout(() => {
+                    const standaloneComponents = document.querySelectorAll('.study-component-standalone');
+                    let componentInfo = `Standalone Components: ${standaloneComponents.length}\n`;
+                    
+                    standaloneComponents.forEach((comp, index) => {
+                        const styles = window.getComputedStyle(comp);
+                        componentInfo += `Component ${index + 1}:
+  Background: ${comp.style.background || styles.background}
+  Border Color: ${comp.style.borderColor || styles.borderColor}
+  --theme-primary: ${comp.style.getPropertyValue('--theme-primary')}
+  --theme-text: ${comp.style.getPropertyValue('--theme-text')}\n`;
+                    });
+                    
+                    updateDebug('theme-debug', componentInfo);
+                }, 500);
+            } else {
+                updateStatus('theme-status', 'Cannot change theme - Study Pouch not available');
+            }
+        }
+
+        function inspectComponents() {
+            console.log('=== Component Inspection ===');
+            
+            if (typeof window.kana !== 'undefined' && window.kana.studyPouch) {
+                const pouch = window.kana.studyPouch;
+                const standaloneComponents = document.querySelectorAll('.study-component-standalone');
+                
+                let info = `Study Pouch Components: ${pouch.components.size}
+Standalone Components: ${standaloneComponents.length}
+
+Component Details:\n`;
+                
+                pouch.components.forEach((component, id) => {
+                    info += `${id}: ${component.type} (${component.isStandalone ? 'standalone' : 'in pouch'})\n`;
+                });
+                
+                info += `\nStandalone Elements:\n`;
+                standaloneComponents.forEach((element, index) => {
+                    const rect = element.getBoundingClientRect();
+                    info += `Element ${index + 1}: ${element.className}
+  Position: ${rect.left}x${rect.top}
+  Size: ${rect.width}x${rect.height}
+  Theme Variables: 
+    Primary: ${element.style.getPropertyValue('--theme-primary')}
+    Text: ${element.style.getPropertyValue('--theme-text')}\n`;
+                });
+                
+                updateDebug('theme-debug', info);
+                updateStatus('theme-status', 'Component inspection complete - check debug info');
+            } else {
+                updateStatus('theme-status', 'Cannot inspect - Study Pouch not available');
+            }
+        }
+
+        // Auto-run tests when page loads
+        setTimeout(() => {
+            checkOrbVisibility();
+            testThemeSync();
+        }, 2000);
+    </script>
+</body>
+</html>

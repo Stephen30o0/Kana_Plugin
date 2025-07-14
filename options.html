@@ -218,6 +218,41 @@
         #glass-preview {
             transition: all 0.3s ease;
         }
+        
+        .api-input {
+            width: 250px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .api-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .api-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .setting-select {
+            width: 250px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .setting-select option {
+            background: #333;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -306,6 +341,16 @@
                 <div class="setting-control">
                     <input type="range" class="range-control" id="panel-transparency" min="0" max="100" value="95">
                     <span class="range-value" id="panel-transparency-value">95%</span>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Adaptive Colors</div>
+                    <div class="setting-description">Automatically adapt text colors to page backgrounds (orb logo stays white)</div>
+                </div>
+                <div class="setting-control">
+                    <div class="toggle-switch active" id="adaptive-colors"></div>
                 </div>
             </div>
         </div>
@@ -523,6 +568,82 @@
                 </div>
                 <div class="setting-control">
                     <span class="keyboard-shortcut">Ctrl+Shift+R</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">YouTube Integration</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">YouTube API Key</div>
+                    <div class="setting-description">Enter your YouTube Data API v3 key for real-time video search</div>
+                </div>
+                <div class="setting-control">
+                    <input type="password" id="youtube-api-key" placeholder="Enter YouTube API key..." class="api-input">
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Search Mode</div>
+                    <div class="setting-description">Choose between static database or live YouTube search</div>
+                </div>
+                <div class="setting-control">
+                    <select id="search-mode" class="setting-select">
+                        <option value="auto">Auto (API key if available, fallback to database)</option>
+                        <option value="live">Live Search Only (requires API key)</option>
+                        <option value="database">Static Database Only</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h4>🔑 How to get YouTube API Key:</h4>
+                <p>1. Go to <a href="https://console.cloud.google.com/" target="_blank" style="color: #90caf9;">Google Cloud Console</a></p>
+                <p>2. Create a new project or select existing one</p>
+                <p>3. Enable "YouTube Data API v3"</p>
+                <p>4. Create credentials (API Key)</p>
+                <p>5. Restrict the key to YouTube Data API v3</p>
+                <p><strong>With API key:</strong> Find any educational video on YouTube<br>
+                <strong>Without API key:</strong> Limited to curated educational database</p>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-secondary" id="test-youtube-api">Test API Connection</button>
+                <button class="btn btn-primary" id="save-youtube-settings">Save YouTube Settings</button>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-title">AI Configuration</div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">Gemini API Key</div>
+                    <div class="setting-description">
+                        Enter your Google Gemini API key for unlimited AI responses. 
+                        <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" style="color: #fff; text-decoration: underline;">Get your free API key here</a>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <input type="password" id="gemini-api-key" placeholder="Enter Gemini API key..." class="api-input">
+                    <button id="test-gemini-api" class="btn btn-secondary">Test API Key</button>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <div class="setting-info">
+                    <div class="setting-label">AI Response Mode</div>
+                    <div class="setting-description">Choose how Kana generates responses</div>
+                </div>
+                <div class="setting-control">
+                    <select id="ai-response-mode">
+                        <option value="auto">Auto (API key if available, fallback to demo)</option>
+                        <option value="api-only">API Only (requires valid API key)</option>
+                        <option value="demo-only">Demo Mode (no API calls)</option>
+                    </select>
                 </div>
             </div>
         </div>

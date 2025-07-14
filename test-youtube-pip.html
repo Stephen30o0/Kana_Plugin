@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana YouTube PiP Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .test-content {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+        }
+        .youtube-links {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 Kana YouTube Picture-in-Picture Test</h1>
+    
+    <div class="test-content">
+        <h2>Testing YouTube PiP Integration</h2>
+        <p>This page simulates how Kana would handle YouTube video suggestions in responses.</p>
+        
+        <div class="youtube-links">
+            <h3>Sample YouTube Links:</h3>
+            <p>Check out this JavaScript tutorial: https://www.youtube.com/watch?v=W6NZfCO5SIk</p>
+            <p>Learn about AI: https://youtu.be/aircAruvnKk</p>
+            <p>Python basics: https://www.youtube.com/watch?v=_uQrJ0TkZlc</p>
+        </div>
+        
+        <button onclick="testSingleVideo()">Test Single Video</button>
+        <button onclick="testMultipleVideos()">Test Multiple Videos</button>
+        <button onclick="testPiPStatus()">Check PiP Status</button>
+        <button onclick="closeAllVideos()">Close All Videos</button>
+    </div>
+
+    <div class="test-content">
+        <h3>Test Results:</h3>
+        <div id="test-results"></div>
+    </div>
+
+    <script src="js/youtube-pip-manager.js"></script>
+    <script>
+        let pipManager;
+        
+        // Initialize the YouTube PiP Manager
+        function initializePiP() {
+            try {
+                pipManager = new YouTubePiPManager();
+                log('✅ YouTube PiP Manager initialized successfully');
+            } catch (error) {
+                log(`❌ Failed to initialize: ${error.message}`);
+            }
+        }
+        
+        function log(message) {
+            const results = document.getElementById('test-results');
+            results.innerHTML += `<div style="margin: 5px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 3px;">${message}</div>`;
+            results.scrollTop = results.scrollHeight;
+        }
+        
+        function testSingleVideo() {
+            const sampleText = "Here's a great tutorial: https://www.youtube.com/watch?v=W6NZfCO5SIk";
+            log('🧪 Testing single video...');
+            
+            if (pipManager) {
+                pipManager.openYouTubeVideos(sampleText);
+                log('✅ Single video test completed');
+            } else {
+                log('❌ PiP Manager not available');
+            }
+        }
+        
+        function testMultipleVideos() {
+            const sampleText = `
+                Check out these learning resources:
+                1. JavaScript basics: https://www.youtube.com/watch?v=W6NZfCO5SIk
+                2. AI fundamentals: https://youtu.be/aircAruvnKk
+                3. Python tutorial: https://www.youtube.com/watch?v=_uQrJ0TkZlc
+            `;
+            log('🧪 Testing multiple videos...');
+            
+            if (pipManager) {
+                pipManager.openYouTubeVideos(sampleText);
+                log('✅ Multiple videos test completed');
+            } else {
+                log('❌ PiP Manager not available');
+            }
+        }
+        
+        function testPiPStatus() {
+            if (pipManager) {
+                const status = pipManager.getStatus();
+                log(`📊 Status: ${status.activeVideos} active, ${status.queuedVideos} queued, max: ${status.maxConcurrent}`);
+                log(`🎬 Video IDs: ${status.videoIds.join(', ')}`);
+            } else {
+                log('❌ PiP Manager not available');
+            }
+        }
+        
+        function closeAllVideos() {
+            if (pipManager) {
+                pipManager.closeAllVideos();
+                log('🗑️ All videos closed');
+            } else {
+                log('❌ PiP Manager not available');
+            }
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initializePiP();
+            log('📄 Test page loaded');
+        });
+    </script>
+</body>
+</html>

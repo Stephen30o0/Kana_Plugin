@@ -1,0 +1,2216 @@
+/**
+ * Google Docs Integration Module for Kana AI Assistant
+ * Provides document editing, formatting, and content creation capabilities
+ */
+
+class GoogleDocsIntegration {
+  constructor() {
+    this.isGoogleDocs = this.detectGoogleDocs();
+    this.documentInterface = null;
+    this.formatCommands = new Map();
+    this.initialized = false;
+    
+    if (this.isGoogleDocs) {
+      this.init();
+    }
+  }
+
+  detectGoogleDocs() {
+    const url = window.location.href;
+    return url.includes('docs.google.com/document') || 
+           url.includes('docs.google.com/spreadsheets') ||
+           url.includes('docs.google.com/presentation');
+  }
+
+  async init() {
+    try {
+      console.log('Kana Google Docs Integration: Initializing...');
+      
+      // Wait for Google Docs to fully load
+      await this.waitForDocsToLoad();
+      
+      // Initialize document interface
+      this.documentInterface = new GoogleDocsDocumentInterface();
+      
+      // Set up format commands mapping
+      this.setupFormatCommands();
+      
+      this.initialized = true;
+      console.log('Kana Google Docs Integration: Successfully initialized');
+      
+      // Register with main Kana instance if available
+      this.registerWithKana();
+      
+    } catch (error) {
+      console.error('Kana Google Docs Integration: Failed to initialize', error);
+    }
+  }
+
+  async waitForDocsToLoad() {
+    return new Promise((resolve) => {
+      const checkLoaded = () => {
+        const editor = document.querySelector('.kix-appview-editor') || 
+                      document.querySelector('[role="textbox"]') ||
+                      document.querySelector('.docs-texteventtarget-iframe');
+        
+        if (editor) {
+          // Wait a bit more to ensure everything is ready
+          setTimeout(resolve, 1000);
+        } else {
+          setTimeout(checkLoaded, 500);
+        }
+      };
+      checkLoaded();
+    });
+  }
+
+  registerWithKana() {
+    // Register this module with the main Kana assistant
+    if (window.kanaAssistant) {
+      window.kanaAssistant.googleDocsIntegration = this;
+      console.log('Kana Google Docs Integration: Registered with main Kana instance');
+    } else {
+      // Wait for Kana to load
+      const checkKana = () => {
+        if (window.kanaAssistant) {
+          window.kanaAssistant.googleDocsIntegration = this;
+          console.log('Kana Google Docs Integration: Registered with main Kana instance');
+        } else {
+          setTimeout(checkKana, 1000);
+        }
+      };
+      checkKana();
+    }
+  }
+
+  setupFormatCommands() {
+    this.formatCommands.set('bold', () => this.documentInterface.toggleBold());
+    this.formatCommands.set('italic', () => this.documentInterface.toggleItalic());
+    this.formatCommands.set('underline', () => this.documentInterface.toggleUnderline());
+    this.formatCommands.set('center', () => this.documentInterface.setAlignment('center'));
+    this.formatCommands.set('left', () => this.documentInterface.setAlignment('left'));
+    this.formatCommands.set('right', () => this.documentInterface.setAlignment('right'));
+    this.formatCommands.set('justify', () => this.documentInterface.setAlignment('justify'));
+    this.formatCommands.set('double space', () => this.documentInterface.setLineSpacing('double'));
+    this.formatCommands.set('single space', () => this.documentInterface.setLineSpacing('single'));
+    this.formatCommands.set('1.5 space', () => this.documentInterface.setLineSpacing('1.5'));
+  }
+
+  // Main method to handle user requests
+  async handleRequest(userMessage) {
+    console.log('Google Docs Integration: handleRequest called with:', userMessage);
+    
+    if (!this.initialized) {
+      console.log('Google Docs Integration: Not initialized yet');
+      return {
+        success: false,
+        message: "Google Docs integration not ready. Please wait a moment and try again."
+      };
+    }
+
+    try {
+      const intent = this.parseIntent(userMessage);
+      console.log('Google Docs Integration: Parsed intent:', intent);
+      
+      switch (intent.type) {
+        case 'change_tone':
+          console.log('Google Docs Integration: Handling tone change');
+          return await this.changeTone(intent.data);
+          
+        case 'create_outline':
+          console.log('Google Docs Integration: Handling outline creation');
+          return await this.createOutline(intent.data);
+          
+        case 'format_text':
+          console.log('Google Docs Integration: Handling text formatting');
+          return await this.formatText(intent.data);
+          
+        case 'insert_content':
+          console.log('Google Docs Integration: Handling content insertion');
+          return await this.insertContent(intent.data);
+          
+        case 'create_essay_structure':
+          console.log('Google Docs Integration: Handling essay structure');
+          return await this.createEssayStructure(intent.data);
+          
+        case 'change_font':
+          console.log('Google Docs Integration: Handling font change');
+          return await this.changeFont(intent.data);
+          
+        default:
+          console.log('Google Docs Integration: Unknown intent type:', intent.type);
+          return {
+            success: false,
+            message: "I'm not sure how to help with that in Google Docs. Try asking me to create an outline, format text, change tone, or change formatting."
+          };
+      }
+    } catch (error) {
+      console.error('Google Docs Integration Error:', error);
+      return {
+        success: false,
+        message: "Sorry, I encountered an error while trying to edit your document."
+      };
+    }
+  }
+
+  parseIntent(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    // Enhanced tone change patterns - more comprehensive matching
+    if (lowercaseMessage.includes('tone') || lowercaseMessage.includes('humanize') || 
+        lowercaseMessage.includes('rewrite') || lowercaseMessage.includes('rephrase') ||
+        lowercaseMessage.includes('make it more') || lowercaseMessage.includes('sound more') ||
+        lowercaseMessage.includes('make this more') || lowercaseMessage.includes('make this part more') ||
+        lowercaseMessage.includes('more natural') || lowercaseMessage.includes('more lively') ||
+        lowercaseMessage.includes('more engaging') || lowercaseMessage.includes('more conversational') ||
+        lowercaseMessage.includes('more casual') || lowercaseMessage.includes('more human') ||
+        lowercaseMessage.includes('more readable') || lowercaseMessage.includes('improve') ||
+        (lowercaseMessage.includes('make') && (lowercaseMessage.includes('natural') || 
+         lowercaseMessage.includes('lively') || lowercaseMessage.includes('better')))) {
+      const toneType = this.extractToneType(message);
+      const scope = this.extractScope(message);
+      return {
+        type: 'change_tone',
+        data: { message, toneType, scope }
+      };
+    }
+    
+    // Create outline patterns
+    if (lowercaseMessage.includes('outline') || lowercaseMessage.includes('structure')) {
+      const topic = this.extractTopic(message);
+      return {
+        type: 'create_outline',
+        data: { topic, message }
+      };
+    }
+    
+    // Essay structure patterns
+    if (lowercaseMessage.includes('essay') && (lowercaseMessage.includes('structure') || lowercaseMessage.includes('format'))) {
+      const topic = this.extractTopic(message);
+      return {
+        type: 'create_essay_structure',
+        data: { topic, message }
+      };
+    }
+    
+    // Formatting patterns
+    if (lowercaseMessage.includes('format') || lowercaseMessage.includes('bold') || 
+        lowercaseMessage.includes('italic') || lowercaseMessage.includes('center') ||
+        lowercaseMessage.includes('justify') || lowercaseMessage.includes('spacing')) {
+      return {
+        type: 'format_text',
+        data: { message }
+      };
+    }
+    
+    // Font change patterns - enhanced with AI-style detection
+    if (lowercaseMessage.includes('font') || lowercaseMessage.includes('typeface')) {
+      // Extract font name with better patterns
+      const fontPatterns = [
+        /(?:change|set|make|use).*?font.*?(?:to|as)\s*([^.!?]+)/i,
+        /font.*?(?:to|as)\s*([^.!?]+)/i,
+        /(?:use|apply)\s*([^.!?]+)\s*font/i,
+        /(?:switch|change)\s*to\s*([^.!?]+)/i
+      ];
+      
+      let fontName = null;
+      for (const pattern of fontPatterns) {
+        const match = message.match(pattern);
+        if (match) {
+          fontName = match[1].trim().replace(/[?!.,;]+$/, '');
+          // Handle common variations
+          fontName = this.normalizeFontName(fontName);
+          break;
+        }
+      }
+      
+      return {
+        type: 'change_font',
+        data: { message, fontName }
+      };
+    }
+    
+    // Size change patterns
+    if (lowercaseMessage.includes('size') && /\d+/.test(message)) {
+      const sizeMatch = message.match(/(?:size|pt|point).*?(\d+)/i) || message.match(/(\d+)\s*(?:pt|point|px)?/i);
+      return {
+        type: 'change_size',
+        data: { message, size: sizeMatch ? parseInt(sizeMatch[1]) : null }
+      };
+    }
+    
+    // Insert content patterns
+    if (lowercaseMessage.includes('write') || lowercaseMessage.includes('add') || 
+        lowercaseMessage.includes('insert')) {
+      return {
+        type: 'insert_content',
+        data: { message }
+      };
+    }
+    
+    return {
+      type: 'unknown',
+      data: { message }
+    };
+  }
+
+  extractTopic(message) {
+    // Try to extract the topic from various patterns
+    const patterns = [
+      /outline (?:for|about|on) (.+?)(?:\.|$)/i,
+      /essay (?:about|on) (.+?)(?:\.|$)/i,
+      /structure (?:for|about|on) (.+?)(?:\.|$)/i,
+      /write (?:about|on) (.+?)(?:\.|$)/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+    
+    return null;
+  }
+
+  extractToneType(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    // Specific tone requests
+    if (lowercaseMessage.includes('humanize') || lowercaseMessage.includes('human')) {
+      return 'human';
+    }
+    if (lowercaseMessage.includes('formal')) {
+      return 'formal';
+    }
+    if (lowercaseMessage.includes('casual') || lowercaseMessage.includes('informal')) {
+      return 'casual';
+    }
+    if (lowercaseMessage.includes('professional')) {
+      return 'professional';
+    }
+    if (lowercaseMessage.includes('academic')) {
+      return 'academic';
+    }
+    if (lowercaseMessage.includes('friendly') || lowercaseMessage.includes('conversational')) {
+      return 'friendly';
+    }
+    if (lowercaseMessage.includes('persuasive')) {
+      return 'persuasive';
+    }
+    if (lowercaseMessage.includes('creative') || lowercaseMessage.includes('engaging')) {
+      return 'creative';
+    }
+    
+    // Default to humanize if no specific tone is mentioned
+    return 'human';
+  }
+
+  extractScope(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    if (lowercaseMessage.includes('whole') || lowercaseMessage.includes('entire') || 
+        lowercaseMessage.includes('all') || lowercaseMessage.includes('document')) {
+      return 'document';
+    }
+    if (lowercaseMessage.includes('selected') || lowercaseMessage.includes('selection') ||
+        lowercaseMessage.includes('this section') || lowercaseMessage.includes('highlighted')) {
+      return 'selection';
+    }
+    if (lowercaseMessage.includes('paragraph')) {
+      return 'paragraph';
+    }
+    
+    // Default to selection if text is selected, otherwise current paragraph
+    return 'auto';
+  }
+
+  async changeTone(data) {
+    const { message, toneType, scope } = data;
+    
+    try {
+      console.log('Google Docs Integration: changeTone called with:', { message, toneType, scope });
+      
+      // Get the text to modify based on scope
+      let textToModify = '';
+      let actualScope = scope || 'auto';
+      
+      if (actualScope === 'auto') {
+        // Try selection first, then paragraph, then document
+        textToModify = this.getSelectedText();
+        if (textToModify && textToModify.trim().length > 0) {
+          actualScope = 'selection';
+        } else {
+          textToModify = this.getCurrentParagraphText();
+          if (textToModify && textToModify.trim().length > 0) {
+            actualScope = 'paragraph';
+          } else {
+            textToModify = this.getDocumentText();
+            actualScope = 'document';
+          }
+        }
+      } else {
+        textToModify = await this.getTextForToneChange(actualScope);
+      }
+      
+      if (!textToModify || textToModify.trim().length === 0) {
+        return {
+          success: false,
+          message: "I couldn't find any text to modify. Please select some text or make sure your cursor is in a paragraph."
+        };
+      }
+      
+      console.log(`Text to modify (${actualScope}):`, textToModify.substring(0, 100) + '...');
+      
+      // Generate the tone-changed version
+      const modifiedText = await this.generateToneChangedText(textToModify, toneType);
+      
+      if (!modifiedText) {
+        return {
+          success: false,
+          message: "I couldn't generate the tone-changed text. Please try again."
+        };
+      }
+      
+      console.log('Generated modified text:', modifiedText.substring(0, 100) + '...');
+      
+      // Replace the original text with the modified version
+      const replaceResult = await this.replaceText(textToModify, modifiedText, actualScope);
+      
+      if (replaceResult.success) {
+        const scopeDescription = actualScope === 'document' ? 'document' : 
+                               actualScope === 'selection' ? 'selected text' : 'paragraph';
+        return {
+          success: true,
+          message: `Successfully changed the tone of your ${scopeDescription} to be more ${toneType}.`
+        };
+      } else {
+        return {
+          success: false,
+          message: replaceResult.message || "I had trouble replacing the text. Please try selecting the text and trying again."
+        };
+      }
+      
+    } catch (error) {
+      console.error('Error changing tone:', error);
+      return {
+        success: false,
+        message: "I encountered an error while changing the tone. Please try again."
+      };
+    }
+  }
+
+  // Get currently selected text
+  getSelectedText() {
+    try {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        return selection.toString().trim();
+      }
+      
+      // Try Google Docs specific selection
+      const kixEditor = document.querySelector('.kix-appview-editor');
+      if (kixEditor) {
+        const selectedElements = kixEditor.querySelectorAll('.kix-selection-overlay');
+        if (selectedElements.length > 0) {
+          // Try to extract text from selected elements
+          let selectedText = '';
+          selectedElements.forEach(el => {
+            const textNode = el.closest('.kix-wordhtmlgenerator-word-node');
+            if (textNode) {
+              selectedText += textNode.textContent + ' ';
+            }
+          });
+          return selectedText.trim();
+        }
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error getting selected text:', error);
+      return '';
+    }
+  }
+
+  // Get text of current paragraph where cursor is located
+  getCurrentParagraphText() {
+    try {
+      // Method 1: Try to find the paragraph containing the cursor
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+        
+        // Walk up to find paragraph-like container
+        while (container && container.nodeType !== Node.ELEMENT_NODE) {
+          container = container.parentNode;
+        }
+        
+        // Look for Google Docs paragraph structure
+        while (container && !container.classList.contains('kix-paragraphrenderer')) {
+          container = container.parentNode;
+          if (!container || container === document.body) break;
+        }
+        
+        if (container && container.classList.contains('kix-paragraphrenderer')) {
+          const text = container.textContent.trim();
+          if (text.length > 0) {
+            console.log('Found current paragraph via cursor:', text.substring(0, 50) + '...');
+            return text;
+          }
+        }
+      }
+      
+      // Method 2: Try to find focused paragraph
+      const activeElement = document.activeElement;
+      if (activeElement) {
+        const paragraph = activeElement.closest('.kix-paragraphrenderer');
+        if (paragraph) {
+          const text = paragraph.textContent.trim();
+          if (text.length > 0) {
+            console.log('Found current paragraph via active element:', text.substring(0, 50) + '...');
+            return text;
+          }
+        }
+      }
+      
+      // Method 3: Get first non-empty paragraph
+      const paragraphs = document.querySelectorAll('.kix-paragraphrenderer');
+      for (const para of paragraphs) {
+        const text = para.textContent.trim();
+        if (text.length > 10) { // Skip very short paragraphs
+          console.log('Found first substantial paragraph:', text.substring(0, 50) + '...');
+          return text;
+        }
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error getting current paragraph:', error);
+      return '';
+    }
+  }
+
+  // Get all document text
+  getDocumentText() {
+    try {
+      // Try to get text from the main document area
+      const docContent = document.querySelector('.kix-appview-editor-container') ||
+                        document.querySelector('.kix-appview-editor') ||
+                        document.querySelector('[role="textbox"]');
+      
+      if (docContent) {
+        const text = docContent.textContent.trim();
+        console.log('Found document text:', text.substring(0, 100) + '...');
+        return text;
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error getting document text:', error);
+      return '';
+    }
+  }
+
+  async getTextForToneChange(scope) {
+    try {
+      if (scope === 'document') {
+        // Get all text from the document
+        return document.body.innerText || '';
+      } else if (scope === 'selection') {
+        // Get selected text
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          return selection.toString();
+        }
+        // Fall back to current paragraph if no selection
+        return this.getCurrentParagraphText();
+      } else {
+        // Get current paragraph text (auto or paragraph scope)
+        return this.getCurrentParagraphText();
+      }
+    } catch (error) {
+      console.error('Error getting text for tone change:', error);
+      return '';
+    }
+  }
+
+  getCurrentParagraphText() {
+    try {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+        
+        // Find the paragraph container
+        while (container && container.nodeType !== Node.ELEMENT_NODE) {
+          container = container.parentNode;
+        }
+        
+        // Look for paragraph-like elements
+        while (container && !['P', 'DIV', 'SPAN'].includes(container.tagName)) {
+          container = container.parentNode;
+        }
+        
+        if (container) {
+          return container.innerText || container.textContent || '';
+        }
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error getting current paragraph text:', error);
+      return '';
+    }
+  }
+
+  // Get the normalized font name
+  normalizeFontName(fontName) {
+    if (!fontName) return null;
+    
+    const cleaned = fontName.trim().toLowerCase();
+    
+    // Handle common font name variations
+    const fontMappings = {
+      'times': 'Times New Roman',
+      'times new roman': 'Times New Roman',
+      'arial': 'Arial',
+      'calibri': 'Calibri',
+      'helvetica': 'Helvetica',
+      'georgia': 'Georgia',
+      'verdana': 'Verdana',
+      'comic sans': 'Comic Sans MS',
+      'comic sans ms': 'Comic Sans MS',
+      'trebuchet': 'Trebuchet MS',
+      'trebuchet ms': 'Trebuchet MS',
+      'courier': 'Courier New',
+      'courier new': 'Courier New',
+      'tahoma': 'Tahoma',
+      'impact': 'Impact',
+      'roboto': 'Roboto',
+      'open sans': 'Open Sans',
+      'lato': 'Lato',
+      'montserrat': 'Montserrat',
+      'source sans pro': 'Source Sans Pro',
+      'ubuntu': 'Ubuntu',
+      'pt sans': 'PT Sans',
+      'merriweather': 'Merriweather',
+      'playfair display': 'Playfair Display'
+    };
+    
+    // Check for exact match first
+    if (fontMappings[cleaned]) {
+      return fontMappings[cleaned];
+    }
+    
+    // Check for partial matches
+    for (const [key, value] of Object.entries(fontMappings)) {
+      if (cleaned.includes(key) || key.includes(cleaned)) {
+        return value;
+      }
+    }
+    
+    // Return the original with proper capitalization if no mapping found
+    return fontName.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  async generateToneChangedText(originalText, toneType) {
+    // This would ideally call an AI service, but for now we'll provide local improvements
+    // You can integrate this with your existing AI processing later
+    
+    const toneInstructions = {
+      human: "Make this text sound more natural, conversational, and human-like. Remove overly formal language and add personal touches.",
+      formal: "Make this text more formal and professional. Use proper grammar and sophisticated vocabulary.",
+      casual: "Make this text more casual and conversational. Use simpler words and a relaxed tone.",
+      professional: "Make this text sound professional and business-appropriate while remaining accessible.",
+      academic: "Make this text sound more scholarly and academic. Use precise terminology and formal structure.",
+      friendly: "Make this text sound warm, approachable, and friendly while maintaining clarity.",
+      persuasive: "Make this text more compelling and persuasive. Strengthen the arguments and emotional appeal.",
+      creative: "Make this text more engaging and creative. Add vivid language and interesting expressions."
+    };
+    
+    const instruction = toneInstructions[toneType] || toneInstructions.human;
+    
+    // For now, return a placeholder - this should be connected to your AI processing
+    // You can integrate this with your existing processWithAI method
+    return await this.callAIForToneChange(originalText, instruction);
+  }
+
+  async callAIForToneChange(originalText, instruction) {
+    try {
+      // Try to use the main Kana AI processing if available
+      if (window.kanaAssistant && window.kanaAssistant.processWithAI) {
+        const prompt = `${instruction}\n\nOriginal text:\n"${originalText}"\n\nRewrite this text with the requested tone. Only provide the rewritten text, no explanations.`;
+        
+        // Create a simplified context for AI processing
+        const context = {
+          userQuestion: prompt,
+          platform: 'Google Docs',
+          pageContent: { title: 'Tone Change Request' },
+          questionContext: { intent: 'rewrite' },
+          prioritizedContent: {},
+          relevantVisibleContent: {},
+          timestamp: new Date().toISOString()
+        };
+        
+        // This is a simplified approach - you might want to create a dedicated method for this
+        return new Promise((resolve) => {
+          // Set up a temporary callback to capture the AI response
+          const originalShowResponse = window.kanaAssistant.showResponse;
+          window.kanaAssistant.showResponse = (response) => {
+            // Restore original method
+            window.kanaAssistant.showResponse = originalShowResponse;
+            // Extract and return just the text content
+            const cleanResponse = response.replace(/✅|❌|<[^>]*>/g, '').trim();
+            resolve(cleanResponse || originalText);
+          };
+          
+          // Process with AI
+          window.kanaAssistant.processWithAI(context);
+          
+          // Fallback timeout
+          setTimeout(() => {
+            window.kanaAssistant.showResponse = originalShowResponse;
+            resolve(originalText);
+          }, 10000);
+        });
+      }
+      
+      // Fallback: basic tone improvements without AI
+      return this.applyBasicToneChanges(originalText, instruction);
+      
+    } catch (error) {
+      console.error('Error calling AI for tone change:', error);
+      return this.applyBasicToneChanges(originalText, instruction);
+    }
+  }
+
+  applyBasicToneChanges(text, instruction) {
+    // Basic improvements without AI - can be enhanced
+    let modifiedText = text;
+    
+    if (instruction.includes('human') || instruction.includes('conversational')) {
+      // Make more human/conversational
+      modifiedText = modifiedText
+        .replace(/\bIn conclusion,/g, 'To wrap this up,')
+        .replace(/\bFurthermore,/g, 'Also,')
+        .replace(/\bHowever,/g, 'But')
+        .replace(/\bTherefore,/g, 'So')
+        .replace(/\bUtilize/g, 'Use')
+        .replace(/\bCommence/g, 'Start')
+        .replace(/\bTerminate/g, 'End');
+    } else if (instruction.includes('formal')) {
+      // Make more formal
+      modifiedText = modifiedText
+        .replace(/\bBut\b/g, 'However,')
+        .replace(/\bSo\b/g, 'Therefore,')
+        .replace(/\bAlso,/g, 'Furthermore,')
+        .replace(/\bUse\b/g, 'Utilize')
+        .replace(/\bStart\b/g, 'Commence')
+        .replace(/\bEnd\b/g, 'Conclude');
+    }
+    
+    return modifiedText;
+  }
+
+  async replaceText(originalText, newText, scope) {
+    try {
+      console.log(`Attempting to replace text in scope: ${scope}`);
+      
+      if (scope === 'selection') {
+        // Replace selected text using Google Docs methods
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && selection.toString().trim().length > 0) {
+          // Try to use Google Docs editing approach
+          this.simulateTyping(newText);
+          return { success: true };
+        }
+        return { success: false, message: 'No text selected' };
+        
+      } else if (scope === 'paragraph') {
+        // Replace current paragraph text
+        console.log('Replacing paragraph text...');
+        
+        // Method 1: Try to select the current paragraph and replace
+        const currentParagraph = this.getCurrentParagraphElement();
+        if (currentParagraph) {
+          // Select the paragraph
+          const range = document.createRange();
+          range.selectNodeContents(currentParagraph);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          
+          // Wait a moment for selection to register
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Replace with new text
+          this.simulateTyping(newText);
+          return { success: true };
+        }
+        
+        // Method 2: Try cursor-based replacement
+        return this.replaceParagraphAtCursor(newText);
+        
+      } else if (scope === 'document') {
+        // Replace entire document - select all then replace
+        console.log('Replacing entire document...');
+        
+        // Method 1: Try to select all content first
+        const editor = document.querySelector('.kix-appview-editor') || 
+                      document.querySelector('[role="textbox"]');
+        
+        if (editor) {
+          editor.focus();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Select all content using Ctrl+A
+          const selectAllEvent = new KeyboardEvent('keydown', {
+            key: 'a',
+            code: 'KeyA',
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true
+          });
+          
+          document.dispatchEvent(selectAllEvent);
+          
+          // Wait for selection to complete
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Check if we have a selection
+          const selection = window.getSelection();
+          if (selection && selection.toString().length > 0) {
+            console.log('Successfully selected document content, replacing...');
+            // Now replace with new text
+            this.simulateTyping(newText);
+            return { success: true };
+          } else {
+            // Try alternative method - delete all and type new
+            console.log('No selection detected, trying delete all method...');
+            
+            // Delete all content
+            const deleteAllEvent = new KeyboardEvent('keydown', {
+              key: 'a',
+              code: 'KeyA',
+              ctrlKey: true,
+              bubbles: true
+            });
+            document.dispatchEvent(deleteAllEvent);
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            const deleteEvent = new KeyboardEvent('keydown', {
+              key: 'Delete',
+              code: 'Delete',
+              bubbles: true
+            });
+            document.dispatchEvent(deleteEvent);
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Type new content
+            this.simulateTyping(newText);
+            return { success: true };
+          }
+        }
+        
+        return { success: false, message: 'Could not find document editor' };
+      }
+      
+      return { success: false, message: 'Unknown scope' };
+    } catch (error) {
+      console.error('Error replacing text:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  // Get the current paragraph element
+  getCurrentParagraphElement() {
+    try {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+        
+        // Walk up to find paragraph-like container
+        while (container && container.nodeType !== Node.ELEMENT_NODE) {
+          container = container.parentNode;
+        }
+        
+        // Look for Google Docs paragraph structure
+        while (container && !container.classList.contains('kix-paragraphrenderer')) {
+          container = container.parentNode;
+          if (!container || container === document.body) break;
+        }
+        
+        return container;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting current paragraph element:', error);
+      return null;
+    }
+  }
+
+  // Replace paragraph at cursor position
+  async replaceParagraphAtCursor(newText) {
+    try {
+      // Try to select current line/paragraph using keyboard shortcuts
+      
+      // Go to start of line
+      const homeEvent = new KeyboardEvent('keydown', {
+        key: 'Home',
+        code: 'Home',
+        bubbles: true
+      });
+      document.dispatchEvent(homeEvent);
+      
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Select to end of line
+      const endSelectEvent = new KeyboardEvent('keydown', {
+        key: 'End',
+        code: 'End',
+        shiftKey: true,
+        bubbles: true
+      });
+      document.dispatchEvent(endSelectEvent);
+      
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Type the new text
+      this.simulateTyping(newText);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error replacing paragraph at cursor:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  // Simulate typing text (Google Docs compatible)
+  simulateTyping(text) {
+    try {
+      console.log('Simulating typing text:', text.substring(0, 50) + '...');
+      
+      // Focus on the document editor
+      const editor = document.querySelector('.kix-appview-editor') || 
+                    document.querySelector('[role="textbox"]') ||
+                    document.querySelector('.kix-appview-editor-container');
+      
+      if (editor) {
+        editor.focus();
+        console.log('Focused on editor');
+        
+        // Wait a moment for focus
+        setTimeout(() => {
+          // Clear existing content and type new text
+          this.clearAndTypeText(text);
+        }, 100);
+      } else {
+        console.warn('Could not find Google Docs editor to focus on');
+        // Try alternative typing method
+        this.simulateKeyPresses(text);
+      }
+    } catch (error) {
+      console.error('Error simulating typing:', error);
+      // Fallback to key simulation
+      this.simulateKeyPresses(text);
+    }
+  }
+
+  // Clear content and type new text
+  async clearAndTypeText(text) {
+    try {
+      console.log('Clearing and typing new text...');
+      
+      // Method 1: Try using InputEvent (most compatible)
+      const inputEvent = new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: text,
+        bubbles: true,
+        cancelable: true
+      });
+      
+      const activeElement = document.activeElement;
+      if (activeElement && activeElement.dispatchEvent(inputEvent)) {
+        console.log('Successfully used InputEvent method');
+        return;
+      }
+      
+      // Method 2: Try using composition events
+      const compositionStart = new CompositionEvent('compositionstart', {
+        data: '',
+        bubbles: true
+      });
+      
+      const compositionUpdate = new CompositionEvent('compositionupdate', {
+        data: text,
+        bubbles: true
+      });
+      
+      const compositionEnd = new CompositionEvent('compositionend', {
+        data: text,
+        bubbles: true
+      });
+      
+      if (activeElement) {
+        activeElement.dispatchEvent(compositionStart);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        activeElement.dispatchEvent(compositionUpdate);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        activeElement.dispatchEvent(compositionEnd);
+        console.log('Successfully used composition events');
+        return;
+      }
+      
+      // Method 3: Direct text manipulation
+      if (window.getSelection && window.getSelection().rangeCount > 0) {
+        const selection = window.getSelection();
+        const range = selection.getRangeAt(0);
+        
+        // Clear the range and insert new text
+        range.deleteContents();
+        const textNode = document.createTextNode(text);
+        range.insertNode(textNode);
+        
+        // Move cursor to end
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        console.log('Successfully used direct text manipulation');
+        return;
+      }
+      
+      // Method 4: Character by character typing (slowest but most reliable)
+      console.log('Falling back to character-by-character typing...');
+      await this.typeCharacterByCharacter(text);
+      
+    } catch (error) {
+      console.error('Error in clearAndTypeText:', error);
+      // Final fallback
+      this.simulateKeyPresses(text);
+    }
+  }
+
+  // Type text character by character with proper timing
+  async typeCharacterByCharacter(text) {
+    try {
+      console.log('Typing character by character...');
+      const activeElement = document.activeElement;
+      
+      if (!activeElement) {
+        console.warn('No active element for character typing');
+        return;
+      }
+      
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        
+        // Create key events for the character
+        const keyDownEvent = new KeyboardEvent('keydown', {
+          key: char,
+          code: `Key${char.toUpperCase()}`,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        const keyPressEvent = new KeyboardEvent('keypress', {
+          key: char,
+          code: `Key${char.toUpperCase()}`,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        const inputEvent = new InputEvent('input', {
+          data: char,
+          inputType: 'insertText',
+          bubbles: true
+        });
+        
+        const keyUpEvent = new KeyboardEvent('keyup', {
+          key: char,
+          code: `Key${char.toUpperCase()}`,
+          bubbles: true
+        });
+        
+        // Dispatch events in order
+        activeElement.dispatchEvent(keyDownEvent);
+        activeElement.dispatchEvent(keyPressEvent);
+        activeElement.dispatchEvent(inputEvent);
+        activeElement.dispatchEvent(keyUpEvent);
+        
+        // Small delay between characters for Google Docs to process
+        if (i % 50 === 0) { // Every 50 characters, wait a bit longer
+          await new Promise(resolve => setTimeout(resolve, 20));
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 2));
+        }
+      }
+      
+      console.log('Finished character-by-character typing');
+    } catch (error) {
+      console.error('Error in typeCharacterByCharacter:', error);
+    }
+  }
+
+  // Simulate individual key presses for text input
+  simulateKeyPresses(text) {
+    try {
+      const activeElement = document.activeElement;
+      if (!activeElement) return;
+      
+      for (const char of text) {
+        const keyEvent = new KeyboardEvent('keydown', {
+          key: char,
+          code: `Key${char.toUpperCase()}`,
+          bubbles: true
+        });
+        
+        const inputEvent = new Event('input', { bubbles: true });
+        
+        activeElement.dispatchEvent(keyEvent);
+        activeElement.dispatchEvent(inputEvent);
+      }
+    } catch (error) {
+      console.error('Error simulating key presses:', error);
+    }
+  }
+
+  async createOutline(data) {
+    const { topic, message } = data;
+    
+    let outlineContent;
+    if (topic) {
+      outlineContent = this.generateOutlineForTopic(topic);
+    } else {
+      outlineContent = this.generateGenericOutline();
+    }
+    
+    const success = await this.documentInterface.insertText(outlineContent);
+    
+    return {
+      success,
+      message: success ? 
+        `I've created an outline${topic ? ` for "${topic}"` : ''} in your document.` :
+        "I couldn't insert the outline. Please make sure your cursor is in the document."
+    };
+  }
+
+  generateOutlineForTopic(topic) {
+    return `${topic} - Essay Outline
+
+I. Introduction
+   A. Hook/Attention grabber
+   B. Background information about ${topic}
+   C. Thesis statement
+
+II. Body Paragraph 1 - Main Point 1
+   A. Topic sentence
+   B. Supporting evidence
+   C. Analysis and explanation
+   D. Transition to next point
+
+III. Body Paragraph 2 - Main Point 2
+   A. Topic sentence
+   B. Supporting evidence
+   C. Analysis and explanation
+   D. Transition to next point
+
+IV. Body Paragraph 3 - Main Point 3
+   A. Topic sentence
+   B. Supporting evidence
+   C. Analysis and explanation
+   D. Transition to conclusion
+
+V. Conclusion
+   A. Restate thesis in new words
+   B. Summarize main points
+   C. Final thought or call to action
+
+`;
+  }
+
+  generateGenericOutline() {
+    return `Essay Outline Template
+
+I. Introduction
+   A. Hook/Attention grabber
+   B. Background information
+   C. Thesis statement
+
+II. Body Paragraph 1
+   A. Topic sentence
+   B. Supporting evidence
+   C. Analysis
+   D. Transition
+
+III. Body Paragraph 2
+   A. Topic sentence
+   B. Supporting evidence
+   C. Analysis
+   D. Transition
+
+IV. Body Paragraph 3
+   A. Topic sentence
+   B. Supporting evidence
+   C. Analysis
+   D. Transition
+
+V. Conclusion
+   A. Restate thesis
+   B. Summarize main points
+   C. Final thought
+
+`;
+  }
+
+  async formatText(data) {
+    const { message } = data;
+    const lowercaseMessage = message.toLowerCase();
+    
+    let actionsPerformed = [];
+    
+    // Check for specific formatting commands
+    for (const [command, action] of this.formatCommands) {
+      if (lowercaseMessage.includes(command)) {
+        try {
+          await action();
+          actionsPerformed.push(command);
+        } catch (error) {
+          console.warn(`Failed to execute ${command}:`, error);
+        }
+      }
+    }
+    
+    if (actionsPerformed.length > 0) {
+      return {
+        success: true,
+        message: `Applied formatting: ${actionsPerformed.join(', ')}`
+      };
+    } else {
+      return {
+        success: false,
+        message: "I didn't recognize any formatting commands. Try asking me to make text bold, italic, center it, or change spacing."
+      };
+    }
+  }
+
+  async changeFont(data) {
+    const { message, fontName, size } = data;
+    
+    console.log('Google Docs Integration: changeFont called with data:', data);
+    
+    let actionsPerformed = [];
+    
+    // Use the fontName from parseIntent if available, otherwise extract from message
+    let targetFont = fontName;
+    let targetSize = size;
+    
+    if (!targetFont) {
+      // Fallback to message parsing if parseIntent didn't extract font name
+      const fontMatch = message.match(/font (?:to )?(.+?)(?:\s+size|\s+\d+|\?|!|\.|$)/i) ||
+                       message.match(/change.*?(?:font|typeface).*?to\s+(.+?)(?:\s+size|\s+\d+|\?|!|\.|$)/i);
+      if (fontMatch) {
+        targetFont = fontMatch[1].trim().replace(/[?!.,;]+$/, '').trim();
+        targetFont = this.normalizeFontName(targetFont);
+      }
+    }
+    
+    if (!targetSize) {
+      // Extract size from message if not provided
+      const sizeMatch = message.match(/size (?:to )?(\d+)/i);
+      if (sizeMatch) {
+        targetSize = parseInt(sizeMatch[1]);
+      }
+    }
+    
+    console.log('🎯 Final font target:', targetFont);
+    console.log('🎯 Final size target:', targetSize);
+    
+    if (targetFont) {
+      console.log('✨ Using font name:', targetFont);
+      
+      // Try Google Docs specific method first
+      const googleDocsSuccess = await this.changeGoogleDocsFont(targetFont);
+      console.log('Google Docs specific method result:', googleDocsSuccess);
+      
+      if (googleDocsSuccess) {
+        actionsPerformed.push(`font to ${targetFont}`);
+      } else {
+        // Try direct font change approach
+        console.log('Trying direct font change approach...');
+        try {
+          const directResult = await this.tryDirectFontChange(targetFont);
+          console.log('Direct font change result:', directResult);
+          
+          if (directResult) {
+            actionsPerformed.push(`font to ${targetFont}`);
+          } else {
+            // Fallback to execCommand
+            const success = await this.documentInterface.setFont(targetFont);
+            console.log('Font change success:', success);
+            
+            if (success) {
+              actionsPerformed.push(`font to ${targetFont}`);
+            } else {
+              console.warn('Font change failed, trying keyboard shortcut method...');
+              // Try keyboard shortcut method
+              const shortcutSuccess = await this.tryFontShortcut(targetFont);
+              if (shortcutSuccess) {
+                actionsPerformed.push(`font to ${targetFont}`);
+              }
+            }
+          }
+        } catch (methodError) {
+          console.error('Direct font change method failed:', methodError);
+          // Fallback to execCommand
+          const success = await this.documentInterface.setFont(targetFont);
+          console.log('Font change success:', success);
+          
+          if (success) {
+            actionsPerformed.push(`font to ${targetFont}`);
+          } else {
+            console.warn('Font change failed, trying keyboard shortcut method...');
+            // Try keyboard shortcut method
+            try {
+              const shortcutSuccess = await this.tryFontShortcut(targetFont);
+              if (shortcutSuccess) {
+                actionsPerformed.push(`font to ${targetFont}`);
+              }
+            } catch (shortcutError) {
+              console.error('Shortcut method also failed:', shortcutError);
+            }
+          }
+        }
+      }
+    }
+
+    if (targetSize) {
+      console.log('Attempting to set font size to:', targetSize);
+      const success = await this.documentInterface.setFontSize(targetSize);
+      if (success) {
+        actionsPerformed.push(`size to ${targetSize}`);
+      }
+    }
+
+    if (actionsPerformed.length > 0) {
+      return {
+        success: true,
+        message: `Successfully changed ${actionsPerformed.join(' and ')}.`
+      };
+    } else {
+      return {
+        success: false,
+        message: "I tried to change the font but Google Docs' font controls are complex. Please manually select your text and use the font dropdown in the toolbar to change it to Times New Roman. You can also try using Ctrl+Shift+F to open the font dialog."
+      };
+    }
+  }
+
+  // Google Docs specific font changing method
+  async changeGoogleDocsFont(fontName) {
+    try {
+      console.log('🔤 Trying Google Docs specific font change for:', fontName);
+      
+      // Step 1: Focus on the document and select text (CRITICAL for font changes)
+      const editor = document.querySelector('.kix-appview-editor') || 
+                    document.querySelector('[role="textbox"]') ||
+                    document.querySelector('.kix-appview-editor-container');
+      
+      if (!editor) {
+        console.error('❌ Could not find Google Docs editor');
+        return false;
+      }
+      
+      editor.focus();
+      console.log('✅ Focused on Google Docs editor');
+      
+      // Wait for focus to register
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Select all text - this is ESSENTIAL for font changes to work
+      console.log('📝 Selecting all text...');
+      const selectAllEvent = new KeyboardEvent('keydown', {
+        key: 'a',
+        code: 'KeyA',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      
+      document.dispatchEvent(selectAllEvent);
+      
+      // Wait for selection to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Verify we have selected text
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        console.log('✅ Successfully selected text, length:', selection.toString().length);
+      } else {
+        console.warn('⚠️ No text appears to be selected - this might be why font changes fail');
+      }
+      
+      // Step 2: Find the font dropdown in the toolbar
+      console.log('🔍 Looking for font dropdown...');
+      
+      // First, try to find the font dropdown with very specific Google Docs selectors
+      let fontDropdown = null;
+      
+      // Method 1: Look for the font button by inspecting the toolbar structure
+      console.log('🔍 Method 1: Looking in formatting toolbar...');
+      const toolbars = document.querySelectorAll('[role="toolbar"], .docs-toolbar, #docs-toolbar');
+      
+      for (const toolbar of toolbars) {
+        console.log(`🔧 Checking toolbar: ${toolbar.className || toolbar.id}`);
+        const buttons = toolbar.querySelectorAll('[role="button"]');
+        
+        for (const btn of buttons) {
+          const text = btn.textContent?.trim() || '';
+          const aria = btn.getAttribute('aria-label') || '';
+          const title = btn.getAttribute('title') || '';
+          
+          // Skip obvious non-font buttons more aggressively
+          if (aria.includes('font size') || aria.includes('Decrease') || aria.includes('Increase') ||
+              aria.includes('size') || aria.includes('Size') || text.includes('Size') ||
+              aria.includes('smaller') || aria.includes('larger') || aria.includes('zoom')) {
+            console.log(`⏭️ Skipping non-font button: "${text}" | "${aria}"`);
+            continue;
+          }
+          
+          // Check if this button contains a font name (indicating it's the font dropdown)
+          const fontNames = ['Arial', 'Times New Roman', 'Calibri', 'Roboto', 'Georgia', 'Verdana', 'Helvetica'];
+          const isFont = fontNames.some(font => text.includes(font) || text === font);
+          const isFontAria = (aria.toLowerCase().includes('font family') || 
+                             (aria.toLowerCase().includes('font') && !aria.toLowerCase().includes('size')));
+          const isFontTitle = (title.toLowerCase().includes('font family') || 
+                              (title.toLowerCase().includes('font') && !title.toLowerCase().includes('size')));
+          
+          console.log(`🔍 Button check: "${text}" | Aria: "${aria}" | Font: ${isFont} | FontAria: ${isFontAria}`);
+          
+          if (isFont || isFontAria || isFontTitle) {
+            console.log(`✅ Found potential font dropdown: "${text}" (aria: "${aria}")`);
+            fontDropdown = btn;
+            break;
+          }
+        }
+        
+        if (fontDropdown) break;
+      }
+      
+      // Method 2: Look for specific CSS selectors known to work with Google Docs
+      if (!fontDropdown) {
+        console.log('🔍 Method 2: Using specific CSS selectors...');
+        const selectors = [
+          '.docs-font-family .goog-toolbar-combo-button-input',
+          '.docs-font-family',
+          '.goog-toolbar-combo-button',
+          '[aria-label*="font" i][role="button"]',
+          '[data-tooltip*="font" i]'
+        ];
+        
+        for (const selector of selectors) {
+          fontDropdown = document.querySelector(selector);
+          if (fontDropdown) {
+            console.log(`✅ Found font dropdown with selector: ${selector}`);
+            break;
+          }
+        }
+      }
+      
+      // Method 3: Scan all buttons and look for font indicators
+      if (!fontDropdown) {
+        console.log('🔍 Method 3: Scanning all buttons for font indicators...');
+        const allButtons = document.querySelectorAll('[role="button"]');
+        console.log(`🔍 Found ${allButtons.length} total buttons to check`);
+        
+        // Look for buttons that likely contain font names
+        const commonFonts = ['Arial', 'Times New Roman', 'Calibri', 'Roboto', 'Georgia', 'Verdana', 'Comic Sans', 'Helvetica'];
+        
+        for (const btn of allButtons) {
+          const text = btn.textContent?.trim() || '';
+          const classList = btn.className || '';
+          const aria = btn.getAttribute('aria-label') || '';
+          
+          // Skip buttons that are clearly not font controls
+          if (text.length > 50 || classList.includes('menu') || aria.includes('menu')) {
+            continue;
+          }
+          
+          // Check if button text matches a common font
+          const matchesFont = commonFonts.some(font => 
+            text === font || text.includes(font)
+          );
+          
+          if (matchesFont) {
+            console.log(`✅ Found font button by text match: "${text}"`);
+            fontDropdown = btn;
+            break;
+          }
+        }
+      }
+      
+      if (!fontDropdown) {
+        console.error('❌ Could not find font dropdown button');
+        console.log('Available toolbar buttons:');
+        document.querySelectorAll('[role="button"]').forEach((btn, i) => {
+          if (i < 10) { // Log first 10 for debugging
+            console.log(`  ${i}: "${btn.textContent?.trim()}" (${btn.className})`);
+          }
+        });
+        return false;
+      }
+      
+      console.log('✅ Found font dropdown:', fontDropdown.textContent?.trim());
+      console.log('Current font before change:', fontDropdown.textContent?.trim());
+      
+      // Step 3: Click the font dropdown
+      fontDropdown.click();
+      console.log('🖱️ Clicked font dropdown');
+      
+      // Wait for dropdown menu to appear
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Step 4: Find the font option in the dropdown
+      console.log('🔍 Looking for font option in dropdown...');
+      
+      // Wait longer for the font menu to fully load
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Try to find the font menu specifically (not the main Google Docs menu)
+      let menuItems = [];
+      
+      // Method 1: Look for font-specific menu containers
+      const fontMenus = document.querySelectorAll('.goog-menu[style*="visibility: visible"], [role="menu"][style*="visibility: visible"]');
+      console.log(`🔍 Found ${fontMenus.length} visible menus`);
+      
+      for (const menu of fontMenus) {
+        const menuText = menu.textContent || '';
+        // Skip menus that clearly contain non-font items (document content)
+        const documentKeywords = [
+          'Privacy in the Digital Age', 'Meta\'s Tracking', 'Data Collection', 'Cross-Platform',
+          'Offline Data', 'Shadow Profiles', 'Recent Technological', 'Case Studies',
+          'Healthcare Data', 'Financial Services', 'Apple\'s App', 'User-Controlled',
+          'Regulatory Responses', 'Technical Solutions', 'Introduction', 'Overview',
+          'File', 'Edit', 'View', 'Insert', 'Format', 'Tools', 'Extensions', 'Help'
+        ];
+        
+        const isDocumentContent = documentKeywords.some(keyword => menuText.includes(keyword));
+        const isMainMenu = menuText.includes('File') && menuText.includes('Edit') && menuText.includes('View');
+        
+        if (isDocumentContent || isMainMenu) {
+          console.log('⏭️ Skipping document content or main menu');
+          continue;
+        }
+        
+        // Look for font items in this menu
+        const items = menu.querySelectorAll('[role="menuitem"], [role="option"], .goog-menuitem');
+        console.log(`🔍 Found ${items.length} items in this menu`);
+        
+        // Check if this looks like a font menu (contains font names)
+        let fontItemCount = 0;
+        const commonFonts = ['Arial', 'Times', 'Calibri', 'Roboto', 'Georgia', 'Verdana', 'Helvetica', 'Comic Sans'];
+        
+        for (const item of items) {
+          const itemText = item.textContent?.trim() || '';
+          // Look for exact font name matches (not partial)
+          if (commonFonts.some(font => itemText === font || itemText === `${font} (default)` || itemText.startsWith(font))) {
+            fontItemCount++;
+          }
+        }
+        
+        console.log(`📊 Font items found in this menu: ${fontItemCount}`);
+        
+        // Only consider it a font menu if it has multiple font items
+        if (fontItemCount >= 2) {
+          console.log(`✅ Found font menu with ${fontItemCount} font items`);
+          menuItems = Array.from(items);
+          break;
+        }
+      }
+      
+      // Method 2: If no specific font menu found, look for any visible menu items
+      if (menuItems.length === 0) {
+        console.log('🔍 Looking for any visible menu items...');
+        menuItems = Array.from(document.querySelectorAll('[role="menuitem"]:not([style*="display: none"]), [role="option"]:not([style*="display: none"])'));
+        
+        // Filter out main menu items
+        menuItems = menuItems.filter(item => {
+          const text = item.textContent?.trim() || '';
+          const mainMenuItems = ['File', 'Edit', 'View', 'Insert', 'Format', 'Tools', 'Extensions', 'Help'];
+          return !mainMenuItems.includes(text);
+        });
+      }
+      
+      console.log(`📋 Found ${menuItems.length} potential font menu items`);
+      
+      if (menuItems.length === 0) {
+        console.error('❌ No font menu items found');
+        return false;
+      }
+      
+      // Log available fonts for debugging (filter to likely font names)
+      const availableFonts = Array.from(menuItems)
+        .map(item => item.textContent?.trim())
+        .filter(text => {
+          if (!text || text.length === 0) return false;
+          // Filter out obvious non-font items more aggressively
+          const nonFontItems = [
+            'File', 'Edit', 'View', 'Insert', 'Format', 'Tools', 'Extensions', 'Help', 'Debug', 
+            'Privacy', 'Introduction', 'Meta\'s Tracking', 'Data Collection', 'Cross-Platform',
+            'Offline Data', 'Shadow Profiles', 'Recent Technological', 'Case Studies',
+            'Healthcare Data', 'Financial Services', 'Apple\'s App', 'User-Controlled',
+            'Regulatory Responses', 'Technical Solutions', 'Overview', 'Infrastructure',
+            'Practices', 'Surveillance', 'Technologies', 'Integration', 'Profiles',
+            'Developments', 'Examples', 'Exposure', 'Tracking', 'Impact', 'Settings',
+            'Solutions'
+          ];
+          
+          const isNonFont = nonFontItems.some(nonFont => text.includes(nonFont));
+          const isTooLong = text.length > 30; // Font names are usually short
+          const hasNumbers = /\d{4}/.test(text); // Years in document content
+          
+          return !isNonFont && !isTooLong && !hasNumbers;
+        })
+        .slice(0, 15); // Show first 15 for debugging
+      
+      console.log('📝 Available fonts:', availableFonts);
+      
+      // Clean the target font name for better matching
+      const cleanFontName = fontName.trim().toLowerCase();
+      
+      // Find exact match first (case insensitive)
+      let fontOption = Array.from(menuItems).find(el => {
+        const text = (el.textContent?.trim() || '').toLowerCase();
+        return text === cleanFontName;
+      });
+      
+      // If no exact match, try partial match
+      if (!fontOption) {
+        fontOption = Array.from(menuItems).find(el => {
+          const text = (el.textContent?.trim() || '').toLowerCase();
+          return text.includes(cleanFontName) && text.length > 0;
+        });
+      }
+      
+      // Try reverse partial match (target contains menu text)
+      if (!fontOption) {
+        fontOption = Array.from(menuItems).find(el => {
+          const text = (el.textContent?.trim() || '').toLowerCase();
+          return text.length > 2 && cleanFontName.includes(text);
+        });
+      }
+      
+      // Special handling for common font name variations
+      if (!fontOption && cleanFontName.includes('times')) {
+        fontOption = Array.from(menuItems).find(el => {
+          const text = (el.textContent?.trim() || '').toLowerCase();
+          return text.includes('times') || text.includes('roman');
+        });
+      }
+      
+      if (!fontOption && cleanFontName.includes('arial')) {
+        fontOption = Array.from(menuItems).find(el => {
+          const text = (el.textContent?.trim() || '').toLowerCase();
+          return text.includes('arial');
+        });
+      }
+      
+      if (fontOption) {
+        console.log('✅ Found font option:', fontOption.textContent);
+        fontOption.click();
+        console.log('🖱️ Clicked font option');
+        
+        // Wait for change to apply
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Step 5: Verify the font actually changed
+        const updatedFontDropdown = document.querySelector('.docs-font-family') ||
+                                   fontDropdown;
+        
+        if (updatedFontDropdown) {
+          const newFont = updatedFontDropdown.textContent?.trim();
+          console.log('🔤 Font after change:', newFont);
+          
+          if (newFont && newFont.toLowerCase().includes(fontName.toLowerCase())) {
+            console.log('🎉 Font change verified successfully!');
+            return true;
+          } else {
+            console.warn('⚠️ Font may not have changed. Expected:', fontName, 'Got:', newFont);
+            return false;
+          }
+        }
+        
+        return true;
+      } else {
+        console.error('❌ Font option not found in dropdown');
+        console.log('🔍 Searched for:', fontName);
+        console.log('📋 Available options (first 5):', availableFonts.slice(0, 5));
+        
+        // Close dropdown and try comprehensive fallback
+        document.body.click();
+        
+        console.log('❌ Primary font change method failed - trying comprehensive fallback...');
+        
+        // Try comprehensive fallback methods
+        const fallbackSuccess = await this.tryComprehensiveFontChange(fontName);
+        if (fallbackSuccess) {
+          console.log('✅ Font changed using fallback method!');
+          return true;
+        }
+        
+        console.log('❌ All font change methods failed');
+        return false;
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in changeGoogleDocsFont:', error);
+      
+      // Even on error, try the comprehensive fallback
+      try {
+        console.log('🔄 Trying fallback methods due to error...');
+        const fallbackSuccess = await this.tryComprehensiveFontChange(fontName);
+        if (fallbackSuccess) {
+          console.log('✅ Font changed using fallback method after error!');
+          return true;
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback methods also failed:', fallbackError);
+      }
+      
+      return false;
+    }
+  }
+
+  // Try using a more direct Google Docs font approach
+  async tryDirectFontChange(fontName) {
+    try {
+      console.log('Trying direct font change approach...');
+      
+      // First, select some text or ensure cursor is active
+      const editor = document.querySelector('.kix-appview-editor');
+      if (editor) {
+        editor.focus();
+        
+        // Try to select all content
+        const selectAll = new KeyboardEvent('keydown', {
+          key: 'a',
+          code: 'KeyA',
+          ctrlKey: true,
+          bubbles: true
+        });
+        document.dispatchEvent(selectAll);
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Now try to change font via the font family dropdown
+        const fontFamilyButton = document.querySelector('.docs-font-family .goog-toolbar-combo-button-caption') ||
+                                document.querySelector('.docs-font-family');
+        
+        if (fontFamilyButton) {
+          console.log('Found font family button, current font:', fontFamilyButton.textContent);
+          
+          // Click the font family dropdown
+          const dropdown = fontFamilyButton.closest('.goog-toolbar-combo-button') || fontFamilyButton;
+          dropdown.click();
+          
+          await new Promise(resolve => setTimeout(resolve, 800));
+          
+          // Look for the specific font in the dropdown
+          const fontItems = Array.from(document.querySelectorAll('.goog-menuitem, [role="menuitem"]'))
+                                .filter(item => {
+                                  const text = item.textContent.toLowerCase();
+                                  const target = fontName.toLowerCase();
+                                  return text.includes(target) || text === target;
+                                });
+          
+          console.log('Available font items:', 
+            Array.from(document.querySelectorAll('.goog-menuitem, [role="menuitem"]'))
+                 .map(item => item.textContent));
+          
+          if (fontItems.length > 0) {
+            console.log('Found matching font item:', fontItems[0].textContent);
+            fontItems[0].click();
+            return true;
+          } else {
+            // Try partial match
+            const partialMatch = Array.from(document.querySelectorAll('.goog-menuitem, [role="menuitem"]))
+                                     .find(item => {
+                                       const words = fontName.toLowerCase().split(' ');
+                                       const text = item.textContent.toLowerCase();
+                                       return words.some(word => text.includes(word));
+                                     });
+            
+            if (partialMatch) {
+              console.log('Found partial font match:', partialMatch.textContent);
+              partialMatch.click();
+              return true;
+            }
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in tryDirectFontChange:', error);
+      return false;
+    }
+  }
+
+  // Try font change using keyboard shortcuts
+  async tryFontShortcut(fontName) {
+    try {
+      console.log('Trying font shortcut for:', fontName);
+      
+      // Select all text first (Ctrl+A)
+      const selectAllEvent = new KeyboardEvent('keydown', {
+        key: 'a',
+        code: 'KeyA',
+        ctrlKey: true,
+        bubbles: true
+      });
+      document.dispatchEvent(selectAllEvent);
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Open font dialog with Ctrl+Shift+F
+      const fontDialogEvent = new KeyboardEvent('keydown', {
+        key: 'f',
+        code: 'KeyF',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true
+      });
+      document.dispatchEvent(fontDialogEvent);
+      
+      return false; // This method is experimental
+    } catch (error) {
+      console.error('Error in tryFontShortcut:', error);
+      return false;
+    }
+  }
+
+  // Comprehensive fallback method for font changes
+  async tryComprehensiveFontChange(fontName) {
+    console.log('🔄 Trying comprehensive font change fallback for:', fontName);
+    
+    try {
+      // Method 1: Try Format menu approach
+      console.log('📋 Method 1: Trying Format menu approach...');
+      const formatResult = await this.tryFormatMenuFont(fontName);
+      if (formatResult) {
+        console.log('✅ Format menu approach succeeded');
+        return true;
+      }
+      
+      // Method 2: Try keyboard shortcut to open font selector
+      console.log('⌨️ Method 2: Trying keyboard shortcuts...');
+      const keyboardResult = await this.tryKeyboardFontChange(fontName);
+      if (keyboardResult) {
+        console.log('✅ Keyboard shortcut approach succeeded');
+        return true;
+      }
+      
+      // Method 3: Try finding font dropdown with different strategy
+      console.log('🔍 Method 3: Trying alternative font dropdown detection...');
+      const altDropdownResult = await this.tryAlternativeFontDropdown(fontName);
+      if (altDropdownResult) {
+        console.log('✅ Alternative dropdown approach succeeded');
+        return true;
+      }
+      
+      // Method 4: Try brute force - click all font-related elements
+      console.log('💪 Method 4: Trying brute force approach...');
+      const bruteForceResult = await this.tryBruteForceFontChange(fontName);
+      if (bruteForceResult) {
+        console.log('✅ Brute force approach succeeded');
+        return true;
+      }
+      
+      console.log('❌ All comprehensive fallback methods failed');
+      return false;
+      
+    } catch (error) {
+      console.error('❌ Error in comprehensive font change:', error);
+      return false;
+    }
+  }
+  
+  // Try using Format menu to change font
+  async tryFormatMenuFont(fontName) {
+    try {
+      // Look for Format menu
+      const formatMenu = Array.from(document.querySelectorAll('[role="menuitem"], .goog-menuheader')).find(el => 
+        el.textContent?.trim() === 'Format'
+      );
+      
+      if (formatMenu) {
+        formatMenu.click();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Look for Font submenu
+        const fontSubMenu = Array.from(document.querySelectorAll('[role="menuitem"]')).find(el => 
+          el.textContent?.includes('Font') || el.textContent?.includes('Text')
+        );
+        
+        if (fontSubMenu) {
+          fontSubMenu.click();
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return this.selectFontFromMenu(fontName);
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in tryFormatMenuFont:', error);
+      return false;
+    }
+  }
+  
+  // Try keyboard shortcuts for font changes
+  async tryKeyboardFontChange(fontName) {
+    try {
+      // First select all text
+      document.execCommand('selectAll');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Try Ctrl+Shift+F for font dialog
+      const fontDialogEvent = new KeyboardEvent('keydown', {
+        key: 'F',
+        code: 'KeyF',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      
+      document.dispatchEvent(fontDialogEvent);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Look for font dialog
+      const fontDialog = document.querySelector('[role="dialog"]');
+      if (fontDialog) {
+        return this.handleFontDialog(fontDialog, fontName);
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in tryKeyboardFontChange:', error);
+      return false;
+    }
+  }
+  
+  // Try alternative font dropdown detection
+  async tryAlternativeFontDropdown(fontName) {
+    try {
+      // Look for any element that might be a font dropdown with different selectors
+      const alternativeSelectors = [
+        '[data-tooltip*="font" i]',
+        '[title*="font" i]',
+        '.docs-icon-font-family',
+        '.docs-font-family-wrapper',
+        '[class*="font-family"]',
+        '[class*="font"] [role="button"]'
+      ];
+      
+      for (const selector of alternativeSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          console.log(`🔍 Found alternative font element with selector: ${selector}`);
+          element.click();
+          await new Promise(resolve => setTimeout(resolve, 800));
+          
+          if (await this.selectFontFromMenu(fontName)) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in tryAlternativeFontDropdown:', error);
+      return false;
+    }
+  }
+  
+  // Brute force approach - try clicking everything that might be font-related
+  async tryBruteForceFontChange(fontName) {
+    try {
+      console.log('💪 Starting brute force font change...');
+      
+      // Get all clickable elements
+      const clickableElements = document.querySelectorAll('[role="button"], button, .goog-toolbar-button, .goog-toolbar-combo-button');
+      
+      for (const element of clickableElements) {
+        const text = element.textContent?.trim() || '';
+        const aria = element.getAttribute('aria-label') || '';
+        const className = element.className || '';
+        
+        // Skip obvious non-font elements
+        if (aria.includes('size') || text.includes('Size') || aria.includes('zoom')) continue;
+        
+        // Look for font-related indicators
+        const isFontRelated = 
+          text.includes('Arial') || text.includes('Times') || text.includes('Calibri') ||
+          aria.includes('font') || className.includes('font') ||
+          text.match(/^[A-Z][a-z]+ ?[A-Z]?[a-z]*$/) && text.length > 3 && text.length < 20;
+        
+        if (isFontRelated) {
+          console.log(`🎯 Trying brute force click on: "${text}" (${aria})`);
+          
+          try {
+            element.click();
+            await new Promise(resolve => setTimeout(resolve, 600));
+            
+            // Check if a menu appeared
+            const menus = document.querySelectorAll('[role="menu"], .goog-menu');
+            if (menus.length > 0) {
+              if (await this.selectFontFromMenu(fontName)) {
+                console.log('✅ Brute force method found the right dropdown!');
+                return true;
+              }
+            }
+            
+            // Close any opened menus
+            document.body.click();
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (clickError) {
+            console.warn('Failed to click element:', clickError);
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in tryBruteForceFontChange:', error);
+      return false;
+    }
+  }
+  
+  // Helper method to select font from any menu
+  async selectFontFromMenu(fontName) {
+    try {
+      const menuItems = document.querySelectorAll('[role="menuitem"], [role="option"], .goog-menuitem');
+      const cleanFontName = fontName.toLowerCase();
+      
+      for (const item of menuItems) {
+        const itemText = (item.textContent?.trim() || '').toLowerCase();
+        
+        // Skip document content
+        const documentKeywords = ['privacy', 'meta', 'tracking', 'data collection', 'introduction'];
+        if (documentKeywords.some(keyword => itemText.includes(keyword))) continue;
+        
+        // Check for font match
+        if (itemText === cleanFontName || 
+            itemText.includes(cleanFontName) ||
+            (cleanFontName.includes('times') && itemText.includes('times'))) {
+          
+          console.log(`🎯 Found font match: "${itemText}" for target "${fontName}"`);
+          item.click();
+          await new Promise(resolve => setTimeout(resolve, 300));
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in selectFontFromMenu:', error);
+      return false;
+    }
+  }
+  
+  // Handle font dialog if it appears
+  async handleFontDialog(dialog, fontName) {
+    try {
+      // Look for font input or dropdown in dialog
+      const fontInput = dialog.querySelector('input[type="text"]') || 
+                       dialog.querySelector('[role="combobox"]');
+      
+      if (fontInput) {
+        fontInput.value = fontName;
+        fontInput.focus();
+        
+        // Trigger input event
+        const inputEvent = new Event('input', { bubbles: true });
+        fontInput.dispatchEvent(inputEvent);
+        
+        // Look for OK/Apply button
+        const okButton = Array.from(dialog.querySelectorAll('button')).find(btn => 
+          btn.textContent?.includes('OK') || btn.textContent?.includes('Apply')
+        );
+        
+        if (okButton) {
+          okButton.click();
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in handleFontDialog:', error);
+      return false;
+    }
+  }
+}
+
+ /**
+ * Google Docs Document Interface
+ * Handles direct interaction with Google Docs DOM elements
+ */
+class GoogleDocsDocumentInterface {
+  constructor() {
+    this.editor = null;
+    this.findEditor();
+  }
+
+  findEditor() {
+    // Find the main editor element
+    this.editor = document.querySelector('.kix-appview-editor') ||
+                 document.querySelector('[role="textbox"]') ||
+                 document.querySelector('.docs-texteventtarget-iframe');
+  }
+
+  async insertText(text) {
+    try {
+      // Method 1: Try using execCommand
+      if (document.execCommand) {
+        document.execCommand('insertText', false, text);
+        return true;
+      }
+
+      // Method 2: Try simulating typing
+      if (this.editor) {
+        this.editor.focus();
+        
+        // Simulate typing the text
+        for (const char of text) {
+          this.simulateKeyPress(char);
+          await this.sleep(10); // Small delay between characters
+        }
+        
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error inserting text:', error);
+      return false;
+    }
+  }
+
+  simulateKeyPress(char) {
+    const event = new KeyboardEvent('keypress', {
+      key: char,
+      char: char,
+      charCode: char.charCodeAt(0),
+      keyCode: char.charCodeAt(0),
+      bubbles: true
+    });
+    
+    if (this.editor) {
+      this.editor.dispatchEvent(event);
+    }
+  }
+
+  async toggleBold() {
+    return this.executeCommand('bold');
+  }
+
+  async toggleItalic() {
+    return this.executeCommand('italic');
+  }
+
+  async toggleUnderline() {
+    return this.executeCommand('underline');
+  }
+
+  async setAlignment(alignment) {
+    const commands = {
+      'left': 'justifyLeft',
+      'center': 'justifyCenter',
+      'right': 'justifyRight',
+      'justify': 'justifyFull'
+    };
+    
+    return this.executeCommand(commands[alignment]);
+  }
+
+  async setLineSpacing(spacing) {
+    // Google Docs doesn't have direct execCommand for line spacing
+    // We'll try to use keyboard shortcuts
+    const shortcuts = {
+      'single': 'Ctrl+1',
+      'double': 'Ctrl+2',
+      '1.5': 'Ctrl+5'
+    };
+    
+    if (shortcuts[spacing]) {
+      return this.simulateShortcut(shortcuts[spacing]);
+    }
+    
+    return false;
+  }
+
+  async setFont(fontName) {
+    console.log('DocumentInterface: setFont called with:', fontName);
+    const result = this.executeCommand('fontName', fontName);
+    console.log('executeCommand result:', result);
+    return result;
+  }
+
+  async setFontSize(size) {
+    return this.executeCommand('fontSize', size.toString());
+  }
+
+  executeCommand(command, value = null) {
+    try {
+      if (document.execCommand) {
+        return document.execCommand(command, false, value);
+      }
+      return false;
+    } catch (error) {
+      console.error(`Error executing command ${command}:`, error);
+      return false;
+    }
+  }
+
+  simulateShortcut(shortcut) {
+    try {
+      const keys = shortcut.split('+');
+      const event = new KeyboardEvent('keydown', {
+        ctrlKey: keys.includes('Ctrl'),
+        shiftKey: keys.includes('Shift'),
+        altKey: keys.includes('Alt'),
+        key: keys[keys.length - 1],
+        bubbles: true
+      });
+      
+      if (this.editor) {
+        this.editor.dispatchEvent(event);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error(`Error simulating shortcut ${shortcut}:`, error);
+      return false;
+    }
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Initialize Google Docs integration when the script loads
+window.GoogleDocsIntegration = GoogleDocsIntegration;
+
+// Auto-initialize if we're on Google Docs
+if (window.location.href.includes('docs.google.com')) {
+  window.googleDocsIntegration = new GoogleDocsIntegration();
+}

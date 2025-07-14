@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube PiP Dragging Test</title>
+    <link rel="stylesheet" href="kana-styles.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            height: 100vh;
+        }
+        
+        .test-content {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        
+        .test-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-content">
+        <h1 style="color: white;">YouTube PiP Dragging Test</h1>
+        <p style="color: white;">This page tests the improved YouTube Picture-in-Picture dragging system.</p>
+        <button class="test-button" onclick="testPiPDragging()">Test YouTube PiP Dragging</button>
+        <button class="test-button" onclick="testMultiplePiP()">Test Multiple PiP Windows</button>
+        <button class="test-button" onclick="testThemeSync()">Test Theme Sync</button>
+    </div>
+    
+    <div class="test-content">
+        <h2 style="color: white;">Test Instructions:</h2>
+        <ul style="color: white;">
+            <li>Click "Test YouTube PiP Dragging" to open a YouTube video in PiP mode</li>
+            <li>Try dragging the PiP window around - it should be smooth and responsive</li>
+            <li>The background should not highlight or get selected while dragging</li>
+            <li>The cursor should change to "grabbing" while dragging</li>
+            <li>Test both mouse and touch dragging (if on mobile)</li>
+            <li><strong>NEW:</strong> Click "Test Theme Sync" to see PiP windows change themes automatically</li>
+        </ul>
+    </div>
+
+    <script src="js/youtube-pip-manager.js"></script>
+    <script>
+        // Initialize YouTube PiP Manager
+        const pipManager = new YouTubePiPManager();
+        
+        function testPiPDragging() {
+            // Test with a real educational video
+            const testVideo = {
+                title: "Test Video - Smooth Dragging",
+                videoId: "dQw4w9WgXcQ", // Rick Roll for testing
+                thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+                duration: "3:32",
+                description: "Testing the improved dragging system"
+            };
+            
+            pipManager.showVideo(testVideo, 'Test improved dragging system');
+        }
+        
+        function testMultiplePiP() {
+            // Test multiple PiP windows
+            const videos = [
+                {
+                    title: "Test Video 1",
+                    videoId: "dQw4w9WgXcQ",
+                    thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+                    duration: "3:32",
+                    description: "First test video"
+                },
+                {
+                    title: "Test Video 2", 
+                    videoId: "M7lc1UVf-VE", // Another test video
+                    thumbnail: "https://img.youtube.com/vi/M7lc1UVf-VE/maxresdefault.jpg",
+                    duration: "2:45",
+                    description: "Second test video"
+                }
+            ];
+            
+            videos.forEach((video, index) => {
+                setTimeout(() => {
+                    pipManager.showVideo(video, `Test video ${index + 1}`);
+                }, index * 1000);
+            });
+        }
+        
+        function testThemeSync() {
+            // Test theme synchronization
+            const themes = ['blue', 'green', 'purple', 'yellow', 'red', 'teal', 'orange', 'pink'];
+            let currentIndex = 0;
+            
+            // Create a test video first
+            testPiPDragging();
+            
+            // Wait a bit then start cycling themes
+            setTimeout(() => {
+                const interval = setInterval(() => {
+                    const theme = themes[currentIndex];
+                    console.log(`🎨 Testing theme: ${theme}`);
+                    
+                    // Simulate theme change by updating the PiP Manager directly
+                    if (pipManager && typeof pipManager.updateTheme === 'function') {
+                        // Create mock theme data (using simplified version for testing)
+                        const mockThemes = {
+                            blue: {
+                                panelBg: 'linear-gradient(135deg, rgba(240, 248, 255, 0.3) 0%, rgba(220, 240, 255, 0.25) 50%, rgba(200, 230, 255, 0.3) 100%)',
+                                panelBorder: 'rgba(100, 160, 255, 0.4)',
+                                panelShadow: 'rgba(70, 130, 240, 0.25)',
+                                textColor: 'rgba(20, 40, 80, 0.92)'
+                            },
+                            green: {
+                                panelBg: 'linear-gradient(135deg, rgba(240, 255, 248, 0.3) 0%, rgba(220, 255, 240, 0.25) 50%, rgba(200, 255, 230, 0.3) 100%)',
+                                panelBorder: 'rgba(100, 255, 160, 0.4)',
+                                panelShadow: 'rgba(70, 240, 130, 0.25)',
+                                textColor: 'rgba(20, 80, 40, 0.92)'
+                            },
+                            purple: {
+                                panelBg: 'linear-gradient(135deg, rgba(248, 240, 255, 0.3) 0%, rgba(240, 220, 255, 0.25) 50%, rgba(230, 200, 255, 0.3) 100%)',
+                                panelBorder: 'rgba(160, 100, 255, 0.4)',
+                                panelShadow: 'rgba(130, 70, 240, 0.25)',
+                                textColor: 'rgba(80, 20, 80, 0.92)'
+                            },
+                            yellow: {
+                                panelBg: 'linear-gradient(135deg, rgba(255, 248, 240, 0.3) 0%, rgba(255, 240, 220, 0.25) 50%, rgba(255, 230, 200, 0.3) 100%)',
+                                panelBorder: 'rgba(255, 200, 100, 0.4)',
+                                panelShadow: 'rgba(240, 180, 70, 0.25)',
+                                textColor: 'rgba(80, 60, 20, 0.92)'
+                            },
+                            red: {
+                                panelBg: 'linear-gradient(135deg, rgba(255, 240, 240, 0.3) 0%, rgba(255, 220, 220, 0.25) 50%, rgba(255, 200, 200, 0.3) 100%)',
+                                panelBorder: 'rgba(255, 100, 100, 0.4)',
+                                panelShadow: 'rgba(240, 70, 70, 0.25)',
+                                textColor: 'rgba(80, 20, 20, 0.92)'
+                            }
+                        };
+                        
+                        const mockSettings = {
+                            opacity: 85,
+                            blur: 20,
+                            saturation: 180,
+                            brightness: 100,
+                            depth: 100
+                        };
+                        
+                        pipManager.updateTheme(theme, mockThemes, mockSettings);
+                    }
+                    
+                    currentIndex = (currentIndex + 1) % 5; // Only test first 5 themes
+                    
+                    if (currentIndex === 0) {
+                        clearInterval(interval);
+                        console.log('✅ Theme testing completed - PiP should return to blue');
+                    }
+                }, 2000);
+            }, 1000);
+        }
+        
+        // Add some test text to verify no selection during drag
+        document.body.addEventListener('selectstart', (e) => {
+            if (document.querySelector('.kana-pip-container.dragging')) {
+                console.log('✅ Selection properly prevented during PiP drag');
+            }
+        });
+        
+        // Monitor dragging state
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const target = mutation.target;
+                    if (target.classList.contains('kana-pip-container')) {
+                        if (target.classList.contains('dragging')) {
+                            console.log('🎯 PiP container entered dragging state');
+                        } else {
+                            console.log('✅ PiP container exited dragging state');
+                        }
+                    }
+                }
+            });
+        });
+        
+        observer.observe(document.body, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    </script>
+</body>
+</html>
