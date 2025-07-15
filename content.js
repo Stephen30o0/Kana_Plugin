@@ -1469,6 +1469,7 @@ class KanaAssistant {
 
   extractPageContent() {
     try {
+      console.log('🔍 Starting page content extraction...');
       const content = {
         title: document.title,
         url: window.location.href,
@@ -1478,7 +1479,8 @@ class KanaAssistant {
         codeBlocks: [],
         assignments: [],
         learningObjectives: [],
-        links: []
+        links: [],
+        visibleText: [] // Add visible text content
       };
 
       // Question patterns to look for
@@ -1611,6 +1613,62 @@ class KanaAssistant {
           });
         });
       });
+
+      // Extract ALL meaningful text content - simple and comprehensive approach
+      console.log('🔍 Extracting all page content...');
+      
+      // Get ALL text-containing elements
+      const allElements = document.querySelectorAll('p, div, span, li, td, th, h1, h2, h3, h4, h5, h6, article, section, blockquote, cite, em, strong, b, i, code, pre');
+      
+      // Simple content extraction - just get everything meaningful
+      allElements.forEach(el => {
+        const text = el.textContent.trim();
+        
+        // Only skip if truly useless
+        if (text.length < 5 || 
+            text.match(/^[\s\d\.\-_\|]+$/) || // Just punctuation/numbers
+            text.toLowerCase().match(/^(home|menu|nav|login|logout|close|back|next|prev|continue|submit|ok|cancel)$/)) {
+          return;
+        }
+        
+        // Add to visible text array
+        content.visibleText.push({
+          text: text,
+          element: el,
+          isVisible: this.isElementInViewport(el, 0.1),
+          context: this.getElementContext(el),
+          tag: el.tagName.toLowerCase()
+        });
+
+        // Also add to general text for backward compatibility
+        if (text.length > 20 && text.length < 2000) {
+          content.text.push(text);
+        }
+      });
+
+      console.log('🔍 Content extraction summary:', {
+        title: content.title,
+        headings: content.headings.length,
+        visibleText: content.visibleText.length,
+        generalText: content.text.length,
+        questions: content.questions.length,
+        links: content.links.length
+      });
+
+      // Debug: Log first few pieces of extracted content
+      console.log('🔍 Sample extracted content:');
+      console.log('- Title:', content.title);
+      console.log('- First 3 headings:', content.headings.slice(0, 3).map(h => h.text));
+      console.log('- First 3 visible text items:', content.visibleText.slice(0, 3).map(item => `${item.text.substring(0, 100)}... (${item.element.tagName})`));
+      console.log('- First 3 general text items:', content.text.slice(0, 3).map(text => text.substring(0, 100) + '...'));
+      
+      // Additional debug for main content detection
+      if (content.visibleText.length === 0) {
+        console.log('⚠️ No visible text found - checking content extraction...');
+        console.log('- Main content area:', mainContentArea ? mainContentArea.tagName : 'None found');
+        console.log('- Total elements checked:', visibleElements.length);
+        console.log('- Sample page text:', document.body.textContent.substring(0, 200) + '...');
+      }
       
       return content;
     } catch (error) {
@@ -1624,7 +1682,8 @@ class KanaAssistant {
         codeBlocks: [],
         assignments: [],
         learningObjectives: [],
-        links: []
+        links: [],
+        visibleText: []
       };
     }
   }
@@ -3024,38 +3083,15 @@ class KanaAssistant {
   }
   
   prepareGeminiPrompt(userQuestion, pageContent, platform, prioritizedContent = null, relevantVisibleContent = null) {
-    // Detect technical development context and domain
-    const isTechnicalContext = this.detectTechnicalContext(userQuestion, pageContent, prioritizedContent);
-    const technicalDomain = this.identifyTechnicalDomain(userQuestion, pageContent);
-    
-    // Create a well-structured prompt for the Gemini API with enhanced technical awareness
-    let prompt = `You are Kana, a friendly AI learning assistant that helps students understand concepts and develop problem-solving skills.
+    // Create a simple, flexible prompt that trusts Gemini 2.5's understanding
+    let prompt = `You are Kana, an intelligent AI learning assistant. You help students learn by providing guidance, hints, and asking thought-provoking questions rather than giving direct answers.
 
 CONTEXT:
 Platform: ${platform}
 Page: ${pageContent.title || 'Learning content'}
-Student Question: "${userQuestion}"`;
+Student Question: "${userQuestion}"
 
-    // Add technical domain context
-    if (technicalDomain) {
-      prompt += `
-Technical Domain: ${technicalDomain}`;
-    }
-
-    // Add specialized technical context if detected
-    if (isTechnicalContext) {
-      prompt += `
-
-TECHNICAL DEVELOPMENT CONTEXT DETECTED:
-- This appears to be a technical development question
-- Technical domains may include: Programming, Web Dev, Game Dev, VR/AR, Data Science, Mobile Dev, DevOps, etc.
-- Common technical terms: API, framework, library, algorithm, database, deployment, etc.
-- VR/AR terms: DOF (Degrees of Freedom), immersive, spatial computing, tracking
-- Game dev terms: GameObject, physics, rendering, collision, animation
-- Web dev terms: frontend, backend, responsive design, REST API, database
-- Programming terms: object-oriented, algorithm, data structure, debugging
-- Focus on practical, domain-specific guidance and best practices`;
-    }
+Your Role: Analyze the page content to understand what subject the student is studying, then provide educational guidance appropriate to that context. Focus on helping them learn and understand rather than just getting answers.`;
 
     // Add conversation context for follow-up questions
     if (this.conversationContext.previousQuestions.length > 0) {
@@ -3110,14 +3146,43 @@ ${relevantVisibleContent.questions.slice(0, 3).map((q, i) =>
 ).join('\n')}`;
     }
 
-    // Add visible content for context
-    if (prioritizedContent && prioritizedContent.highPriority.text.length > 0) {
-      const visibleText = prioritizedContent.highPriority.text
-        .slice(0, 2)
-        .map(t => t.text.substring(0, 200))
+    // Add main page content for context - prioritize what matters
+    if (pageContent.visibleText && pageContent.visibleText.length > 0) {
+      console.log('🔍 Adding page content to prompt:', pageContent.visibleText.length, 'items');
+      
+      // Get the most relevant content - prioritize by element type and content quality
+      const prioritizedContent = pageContent.visibleText
+        .sort((a, b) => {
+          // Prioritize headings and structured content
+          const aScore = (a.tag.match(/h[1-6]/) ? 10 : 0) + 
+                        (a.tag === 'p' ? 5 : 0) + 
+                        (a.text.length > 50 ? 3 : 0) +
+                        (a.isVisible ? 2 : 0);
+          const bScore = (b.tag.match(/h[1-6]/) ? 10 : 0) + 
+                        (b.tag === 'p' ? 5 : 0) + 
+                        (b.text.length > 50 ? 3 : 0) +
+                        (b.isVisible ? 2 : 0);
+          return bScore - aScore;
+        })
+        .slice(0, 15) // Take top 15 most relevant pieces
+        .map(item => item.text.substring(0, 500)) // Generous length
+        .join(' ... ');
+      
+      if (prioritizedContent.length > 0) {
+        prompt += `
+
+Current Page Content:
+${prioritizedContent}`;
+        console.log('🔍 DEBUG: Prioritized content being sent to AI:', prioritizedContent.substring(0, 500) + '...');
+      }
+    } else if (pageContent.text && pageContent.text.length > 0) {
+      // Ultimate fallback - use any text content available
+      const fallbackText = pageContent.text
+        .slice(0, 3)
+        .map(text => text.substring(0, 250))
         .join(' ... ');
       prompt += `
-Visible Content: ${visibleText}`;
+Page Text Content: ${fallbackText}`;
     }
 
     // Add general page context
@@ -3128,72 +3193,31 @@ All Page Topics: ${pageContent.headings.slice(0, 5).join(', ')}`;
 
     prompt += `
 
-CRITICAL LINK RULES - READ CAREFULLY:
-🚫 NEVER WRITE: [Unity Input System Documentation](fake-url)
-🚫 NEVER WRITE: [Unity Raycasting Documentation](invalid-link) 
-🚫 NEVER WRITE: [C# static variables](placeholder-url)
-✅ INSTEAD WRITE: "Check Unity's Input System documentation"
-✅ INSTEAD WRITE: "Look up Unity Raycasting in the official docs"
-✅ INSTEAD WRITE: "Search for C# static variables in Microsoft docs"
-✅ FOR VIDEOS USE: {{YOUTUBE_SEARCH:Unity raycasting tutorial}}
-
 GUIDELINES FOR RESPONSE:
-- CRITICAL: The student is asking about what they can currently see on their screen
-- Look at the "Current Section" and "Other Visible Sections" to understand exactly where they are
-- If this is a follow-up question, they're referring to the same screen location as before
-- When they say "this part" or "explain this" they mean the specific section visible on their screen
-- Focus your response on the EXACT content they're viewing, not generic information
-- If you see a current section like "System Security and Ethical Development", focus on that specific section
-- Provide educational guidance for the specific content they're viewing
-- Help them understand the concepts without giving direct answers
+- Focus on the EXACT content the student is currently viewing on their screen
+- Look at the page title and main headings to understand the core topic
+- Provide educational guidance that encourages learning and critical thinking
+- Help them understand concepts without giving direct answers
 - Use encouraging, supportive language
-- Respond naturally as a conversational AI - format your response however makes most sense
-- IMPORTANT: Proactively include educational videos and resources for most topics using {{YOUTUBE_SEARCH:topic}}
+- When helpful, suggest relevant educational resources like:
+  - Official documentation
+  - Educational platforms (Khan Academy, Coursera, etc.)
+  - Practice sites and communities
 - Be generous with learning materials - students benefit from multiple resources
-- Include relevant educational resources using well-known, reliable sites like official documentation, Khan Academy, or established educational platforms
+- Respond naturally and conversationally
 
-CRITICAL LINK RULES - FOLLOW EXACTLY:
-- NEVER EVER create fake links in the format [Text](fake-url) or [Text](non-working-link)
-- NEVER make up YouTube video URLs or IDs - they will be 404 errors and frustrate users
-- NEVER create clickable links unless you are 100% certain they exist and work
-- DO NOT write things like "[Unity Input System Documentation](fake-link)" - this doesn't work!
-- DO NOT write things like "[Unity Raycasting Documentation](non-working-url)" - this doesn't work!
-- INSTEAD of fake links, write: "Check the Unity Input System documentation" or "Look up Unity Raycasting in the official docs"
-- For YouTube videos, ONLY use this format: {{YOUTUBE_SEARCH:search_term}}
-- Example: {{YOUTUBE_SEARCH:Unity raycasting tutorial}} will find real videos
-- Example: {{YOUTUBE_SEARCH:C# static variables explained}} will find real videos  
-- The system will automatically replace {{YOUTUBE_SEARCH:term}} patterns with real, working YouTube videos
-- Use established educational platforms: Unity Learn, MDN Web Docs, W3Schools, Khan Academy, Coursera, etc.
-- Write "Search Unity Learn for..." instead of "[Unity Learn](fake-url)"
-- Write "Look up on Stack Overflow..." instead of "[Stack Overflow](fake-url)"
+YOUTUBE VIDEO INTEGRATION:
+When educational videos would genuinely help the student understand the current topic better, use this EXACT format:
+{{YOUTUBE_SEARCH:specific search term}}
 
-RESPONSE APPROACH:
-Provide helpful educational guidance focused on the current screen content. IMPORTANT: For most concepts and topics, include relevant educational videos and resources to enhance learning:
+For example:
+- If they're confused about entrepreneurial mindset: {{YOUTUBE_SEARCH:entrepreneurial mindset explained}}
+- If they need help with business fundamentals: {{YOUTUBE_SEARCH:business fundamentals for beginners}}
+- If they're studying programming concepts: {{YOUTUBE_SEARCH:javascript fundamentals tutorial}}
 
-WHEN TO INCLUDE VIDEOS AND RESOURCES:
-- For programming concepts (use {{YOUTUBE_SEARCH:specific_programming_concept}})
-- For technical tutorials (use {{YOUTUBE_SEARCH:step_by_step_tutorial}})
-- For mathematical concepts (use {{YOUTUBE_SEARCH:math_concept_explained}})
-- For science topics (use {{YOUTUBE_SEARCH:science_topic_tutorial}})
-- For design principles (use {{YOUTUBE_SEARCH:design_concept_guide}})
-- For any complex topic that benefits from visual learning
-- When explaining "how" something works
-- When breaking down difficult concepts
+The system will automatically search for and open relevant educational videos. Use specific, focused search terms that match what the student is learning about.
 
-EXAMPLES OF GOOD VIDEO SEARCHES:
-- {{YOUTUBE_SEARCH:Unity C# scripting basics}}
-- {{YOUTUBE_SEARCH:object oriented programming explained}}
-- {{YOUTUBE_SEARCH:Unity raycasting tutorial}}
-- {{YOUTUBE_SEARCH:JavaScript functions beginner guide}}
-- {{YOUTUBE_SEARCH:CSS flexbox layout tutorial}}
-
-ADDITIONAL RESOURCES TO MENTION:
-- Official documentation (Unity Learn, MDN, Microsoft Docs)
-- Educational platforms (Khan Academy, Coursera, freeCodeCamp)
-- Practice sites (Codecademy, LeetCode for coding)
-- Community resources (Stack Overflow, Reddit communities)
-
-Be generous with educational resources - students learn better with multiple learning materials. Focus entirely on what they're currently viewing on their screen and provide specific, helpful guidance for that exact content with comprehensive educational support.`;
+Focus entirely on what they're currently viewing and provide specific, helpful guidance for that exact content.`;
 
     return prompt;
   }
@@ -3255,7 +3279,7 @@ Be generous with educational resources - students learn better with multiple lea
         cleanedResponse = cleanedResponse.replace(/^```\s*/g, '').replace(/\s*```$/g, '');
       }
       
-      // PROCESS YOUTUBE SEARCH REQUESTS
+       // PROCESS YOUTUBE SEARCH REQUESTS
       const youtubeSearchPattern = /\{\{YOUTUBE_SEARCH:([^}]+)\}\}/g;
       const searchRequests = [];
       let match;
@@ -3334,6 +3358,7 @@ Be generous with educational resources - students learn better with multiple lea
           }
         }
       }
+      
       
       // CLEAN UP FAKE LINKS - Remove any invalid markdown links
       // Pattern to match [text](invalid-url) where invalid-url is not a real URL
@@ -3870,9 +3895,8 @@ Be generous with educational resources - students learn better with multiple lea
             }, 500);
           }
         } else {
-          // AI response will contain YouTube search patterns if videos are needed
-          // No fallback search required since AI handles video discovery
-          this.log('No YouTube URLs found in AI response - search patterns will be processed separately');
+          // Let Gemini decide if videos are needed based on the content and context
+          this.log('No YouTube URLs found in AI response - letting Gemini handle video suggestions naturally');
         }
       }
     } catch (error) {
@@ -3954,6 +3978,10 @@ Be generous with educational resources - students learn better with multiple lea
 
     // Define topic patterns and their corresponding search terms
     const topicPatterns = {
+      'entrepreneurship': /entrepreneur|entrepreneurial.*mindset|startup|business.*mindset|resilience|resourcefulness|solutions.*oriented/i,
+      'business fundamentals': /business.*fundamental|business.*strategy|business.*plan|venture|founding.*company/i,
+      'leadership': /leadership|leader|management|team.*building|vision/i,
+      'innovation': /innovation|innovative.*thinking|creativity|problem.*solving|disruptive/i,
       'unity prefabs': /prefab|reusable.*object|instantiat.*object/i,
       'unity ui': /ui|user.*interface|canvas|button.*ui|menu/i,
       'unity scripting': /script|c#|coding|programming.*unity|unity.*code/i,

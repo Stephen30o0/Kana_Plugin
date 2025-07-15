@@ -1195,7 +1195,6 @@ textarea::placeholder {
 .kana-chat-panel.adaptive-colors h4,
 .kana-chat-panel.adaptive-colors li {
   color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.9)) !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   font-weight: 500;
 }
 
@@ -1203,7 +1202,6 @@ textarea::placeholder {
 .kana-chat-panel.adaptive-colors h3,
 .kana-chat-panel.adaptive-colors h4 {
   color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.95)) !important;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   font-weight: 600;
 }
 
@@ -1211,7 +1209,6 @@ textarea::placeholder {
 .kana-chat-panel.adaptive-colors strong {
   color: var(--kana-adaptive-text, rgba(255, 255, 255, 0.98)) !important;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 /* Adaptive input styling */

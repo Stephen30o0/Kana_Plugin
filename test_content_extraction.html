@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Content Extraction - Business Course</title>
+</head>
+<body>
+    <h1>The Founder Academy - Entrepreneurship Module</h1>
+    
+    <div class="course-content">
+        <h2>Today's Topic: Building Your Business Foundation</h2>
+        
+        <p>As Steve Jobs famously said: "Innovation distinguishes between a leader and a follower."</p>
+        
+        <blockquote cite="MIT">
+            "The most successful entrepreneurs are those who understand both the technical and business sides of their ventures." - MIT Entrepreneurship Center
+        </blockquote>
+        
+        <div class="learning-objectives">
+            <h3>Learning Objectives</h3>
+            <ul>
+                <li>Understand the key principles of business model development</li>
+                <li>Learn how to validate your business idea through market research</li>
+                <li>Develop a minimum viable product (MVP) strategy</li>
+            </ul>
+        </div>
+        
+        <div class="main-content">
+            <h3>Business Model Canvas</h3>
+            <p>The Business Model Canvas is a strategic management tool that allows you to describe, design, challenge, invent, and pivot your business model. It consists of nine building blocks that cover the four main areas of a business: customers, offer, infrastructure, and financial viability.</p>
+            
+            <h4>Key Components:</h4>
+            <ol>
+                <li><strong>Value Propositions:</strong> What unique value do you deliver to your customers?</li>
+                <li><strong>Customer Segments:</strong> Who are your most important customers?</li>
+                <li><strong>Revenue Streams:</strong> How does your business make money?</li>
+            </ol>
+        </div>
+        
+        <div class="assignment">
+            <h3>Assignment: Create Your Business Model Canvas</h3>
+            <p>Using the template provided, create a business model canvas for your startup idea. Focus on clearly defining your value proposition and target customer segments.</p>
+        </div>
+    </div>
+
+    <!-- Load Kana Extension for testing -->
+    <script src="content.js"></script>
+    <script>
+        // Test content extraction
+        window.addEventListener('load', () => {
+            console.log('Testing content extraction...');
+            
+            // Simulate Kana initialization
+            if (window.KanaAssistant) {
+                const kana = new KanaAssistant();
+                
+                // Test content extraction after a short delay
+                setTimeout(() => {
+                    const content = kana.extractPageContent();
+                    console.log('📊 Content extraction test results:', {
+                        title: content.title,
+                        visibleTextCount: content.visibleText?.length || 0,
+                        textCount: content.text?.length || 0,
+                        headingsCount: content.headings?.length || 0,
+                        sampleContent: content.visibleText?.slice(0, 3).map(item => ({
+                            tag: item.tag,
+                            text: item.text.substring(0, 100) + '...',
+                            isVisible: item.isVisible
+                        }))
+                    });
+                    
+                    // Check if MIT quote is captured
+                    const mitQuoteFound = content.visibleText?.some(item => 
+                        item.text.toLowerCase().includes('mit') && 
+                        item.text.toLowerCase().includes('entrepreneur')
+                    );
+                    console.log('🎯 MIT quote found:', mitQuoteFound);
+                    
+                    // Test prompt generation
+                    try {
+                        const prompt = kana.prepareGeminiPrompt(
+                            'What are the key principles of business model development?',
+                            content,
+                            'Test Platform'
+                        );
+                        console.log('✅ Prompt generation successful');
+                        console.log('📝 Prompt preview:', prompt.substring(0, 500) + '...');
+                    } catch (error) {
+                        console.error('❌ Prompt generation failed:', error);
+                    }
+                }, 1000);
+            } else {
+                console.log('❌ KanaAssistant not available');
+            }
+        });
+    </script>
+</body>
+</html>
