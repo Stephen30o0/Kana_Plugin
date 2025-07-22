@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Voice Screen Analysis - ALX Learning Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333;
+            margin-top: 30px;
+        }
+
+        .question {
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            margin: 20px 0;
+        }
+
+        .assignment {
+            background: #fff3e0;
+            padding: 15px;
+            border-left: 4px solid #ff9800;
+            margin: 20px 0;
+        }
+
+        .code-block {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        .learning-objective {
+            background: #e8f5e8;
+            padding: 10px;
+            border-left: 4px solid #4caf50;
+            margin: 10px 0;
+        }
+
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        button:hover {
+            background: #1976D2;
+        }
+
+        .status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #4caf50;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="status">✅ Kana Extension Loaded</div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Macro Trends & Industry Shifts</h1>
+            <p>Advanced Founders Program - Sprint 1: Think</p>
+        </div>
+
+        <div class="learning-objective">
+            <strong>Learning Objective:</strong> Understand how emerging technologies reshape industries and identify
+            new business opportunities.
+        </div>
+
+        <h2>1. How Emerging Technologies (AI, Blockchain, Climate Tech) Reshape Industries</h2>
+
+        <p>As advanced founders, staying ahead of <strong>macro trends and industry shifts</strong> is essential for the
+            long-term success of your business. Global forces such as emerging technologies, policy changes, and
+            shifting capital flows can significantly reshape industries, offering new opportunities and threats to your
+            venture. To thrive in a rapidly changing world, it's crucial to understand these trends and how they impact
+            both your current business model and your future growth strategy.</p>
+
+        <div class="question">
+            <strong>Question 1:</strong> How can AI-powered automation impact different industries? Think about
+            efficiency gains, new product development, and changes to the workforce. What are some industries that are
+            ALREADY being heavily disrupted?
+        </div>
+
+        <h3>Emerging Technologies Overview</h3>
+        <p>Emerging technologies are transforming industries, creating new business models, disrupting traditional
+            markets, and opening up entirely new opportunities for innovation.</p>
+
+        <ul>
+            <li><strong>Artificial Intelligence (AI):</strong> Machine learning, natural language processing, computer
+                vision</li>
+            <li><strong>Blockchain:</strong> Decentralized systems, cryptocurrencies, smart contracts</li>
+            <li><strong>Climate Tech:</strong> Renewable energy, carbon capture, sustainable materials</li>
+            <li><strong>Biotechnology:</strong> Gene editing, personalized medicine, synthetic biology</li>
+        </ul>
+
+        <div class="code-block">
+            // Example: AI automation in customer service
+            function automateCustomerSupport(customerQuery) {
+            const intent = analyzeIntent(customerQuery);
+            const response = generateResponse(intent);
+            return response;
+            }
+
+            // Blockchain smart contract example
+            contract SupplyChain {
+            mapping(uint => Product) public products;
+
+            function trackProduct(uint productId, string memory status) public {
+            products[productId].status = status;
+            products[productId].timestamp = block.timestamp;
+            }
+            }
+        </div>
+
+        <div class="question">
+            <strong>Question 2:</strong> Analyze how blockchain technology could revolutionize supply chain management.
+            What transparency and trust issues does it solve?
+        </div>
+
+        <h2>2. Impact Analysis Framework</h2>
+
+        <div class="assignment">
+            <strong>Assignment:</strong> Choose one industry you're familiar with and analyze how emerging technologies
+            will reshape it over the next 5-10 years. Consider:
+            <ul>
+                <li>Current pain points and inefficiencies</li>
+                <li>Which technologies could address these issues</li>
+                <li>New business models that might emerge</li>
+                <li>Potential disruption to existing players</li>
+            </ul>
+        </div>
+
+        <h3>Industry Examples</h3>
+        <p><strong>Healthcare:</strong> AI for diagnostics, telemedicine platforms, personalized treatment plans</p>
+        <p><strong>Finance:</strong> DeFi protocols, robo-advisors, fraud detection systems</p>
+        <p><strong>Manufacturing:</strong> IoT sensors, predictive maintenance, autonomous robots</p>
+        <p><strong>Education:</strong> Adaptive learning platforms, VR/AR training, blockchain credentials</p>
+
+        <div class="question">
+            <strong>Question 3:</strong> What new business opportunities do you see emerging from the intersection of
+            climate tech and AI? Consider sectors like energy, agriculture, and transportation.
+        </div>
+
+        <h2>Key Takeaways</h2>
+        <ul>
+            <li>Stay informed about technological developments in your industry</li>
+            <li>Identify which technologies solve real customer problems</li>
+            <li>Consider both opportunities and threats to your business model</li>
+            <li>Build partnerships with technology innovators</li>
+            <li>Develop a framework for evaluating emerging trends</li>
+        </ul>
+
+        <button onclick="testVoiceAnalysis()">🎤 Test Voice Analysis</button>
+        <button onclick="testTextAnalysis()">💬 Test Text Analysis</button>
+        <button onclick="showKana()">👋 Show Kana</button>
+    </div>
+
+    <script src="content.js"></script>
+    <script>
+        // Test functions
+        function testVoiceAnalysis() {
+            alert('🎤 Say: "What is this page about?" to test voice screen analysis');
+        }
+
+        function testTextAnalysis() {
+            alert('💬 Type: "What can you see on my screen?" in the Kana chat to test text analysis');
+        }
+
+        function showKana() {
+            if (window.kanaAssistant) {
+                window.kanaAssistant.showChatPanel();
+            } else {
+                alert('Kana Assistant not loaded yet. Please wait a moment and try again.');
+            }
+        }
+
+        // Initialize Kana when page loads
+        setTimeout(() => {
+            if (window.KanaAssistant) {
+                window.kanaAssistant = new KanaAssistant();
+                console.log('✅ Kana Assistant initialized for voice testing');
+                document.querySelector('.status').textContent = '✅ Kana Ready - Test Voice Analysis';
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>

@@ -8,7 +8,7 @@ async function loadDataFiles() {
   try {
     const glassThemesUrl = chrome.runtime.getURL('data/glass-themes.js');
     const subjectResourcesUrl = chrome.runtime.getURL('data/subject-resources.js');
-    
+
     // Import the modules directly (this is CSP-safe)
     const [glassThemesModule, subjectResourcesModule] = await Promise.all([
       import(glassThemesUrl).catch(async (error) => {
@@ -24,10 +24,10 @@ async function loadDataFiles() {
         return parseResourceDataSafely(text, 'SUBJECT_RESOURCES');
       })
     ]);
-    
+
     const glassThemes = glassThemesModule.GLASS_THEMES || glassThemesModule.default?.GLASS_THEMES || {};
     const subjectResources = subjectResourcesModule.SUBJECT_RESOURCES || subjectResourcesModule.default?.SUBJECT_RESOURCES || {};
-    
+
     return { glassThemes, subjectResources };
   } catch (error) {
     console.warn('Failed to load external data files, using fallbacks:', error);
@@ -55,22 +55,22 @@ class ConversationContext {
     this.pageContext = null;
     this.maxHistoryLength = 5; // Keep last 5 questions for context
   }
-  
+
   addQuestion(question) {
     this.previousQuestions.push(question);
     if (this.previousQuestions.length > this.maxHistoryLength) {
       this.previousQuestions.shift(); // Remove oldest question
     }
-    
+
     // Try to detect if this continues the current topic
     if (this.currentTopic) {
       const questionLower = question.toLowerCase();
       const topicLower = this.currentTopic.toLowerCase();
-      
+
       // Simple topic continuity check
-      if (questionLower.includes('this') || questionLower.includes('that') || 
-          questionLower.includes('it') || questionLower.includes('here') ||
-          questionLower.includes(topicLower)) {
+      if (questionLower.includes('this') || questionLower.includes('that') ||
+        questionLower.includes('it') || questionLower.includes('here') ||
+        questionLower.includes(topicLower)) {
         // Question seems to continue the current topic
       } else {
         // Seems like a new topic
@@ -80,20 +80,20 @@ class ConversationContext {
       this.currentTopic = this.extractTopicFromQuestion(question);
     }
   }
-  
+
   addResponse(response) {
     this.lastResponse = typeof response === 'string' ? response : response.content || '';
   }
-  
+
   extractTopicFromQuestion(question) {
     // Simple topic extraction - get key nouns/concepts
     const words = question.toLowerCase().split(/\s+/);
     const stopWords = ['what', 'how', 'why', 'when', 'where', 'who', 'is', 'are', 'can', 'do', 'does', 'will', 'should', 'a', 'an', 'the', 'this', 'that', 'i', 'me', 'my'];
     const meaningfulWords = words.filter(word => !stopWords.includes(word) && word.length > 2);
-    
+
     return meaningfulWords.slice(0, 3).join(' '); // Take first few meaningful words as topic
   }
-  
+
   getContext() {
     return {
       previousQuestions: this.previousQuestions,
@@ -102,7 +102,7 @@ class ConversationContext {
       pageContext: this.pageContext
     };
   }
-  
+
   clear() {
     this.previousQuestions = [];
     this.lastResponse = null;
@@ -127,10 +127,29 @@ class KanaAssistant {
     this.subjectResources = {};
     this.dataLoaded = false;
     this.loadExternalData();
-    
+
     // Track last successful AI model for faster responses
     this.lastSuccessfulModel = null;
-    
+
+    // Voice response settings
+    this.voiceResponseEnabled = true;
+    this.speechSynthesis = null;
+    this.currentSpeech = null;
+    this.currentSpeechType = null; // Track type of current speech: 'conversational' or 'reading'
+    this.isSpeaking = false;
+    this.isInVoiceMode = false;
+    this.voiceConversationActive = false;
+    this.voiceRecognitionPaused = false; // Track if voice recognition is paused to prevent feedback
+    this.selectedVoice = null;
+    this.voiceUI = null;
+    this.isListeningForInterrupts = false; // Track interrupt detection during explanations
+    this.interruptRecognition = null; // Separate recognition for interrupts during speech
+
+    // Voice recognition restart management
+    this.voiceRestartAttempts = 0;
+    this.maxVoiceRestartAttempts = 5;
+    this.voiceRestartTimeout = null;
+
     // Default glass settings
     this.glassSettings = {
       panelColor: 'blue',
@@ -141,10 +160,10 @@ class KanaAssistant {
       brightness: 105,
       depth: 60
     };
-    
+
     // Initialize modular components
     this.initializeModules();
-    
+
     this.init();
   }
 
@@ -207,7 +226,7 @@ class KanaAssistant {
         this.studyPouch = new StudyPouchManager();
         this.log('Study Pouch Manager initialized successfully');
         console.log('StudyPouchManager instance:', this.studyPouch);
-        
+
         // Apply theme immediately if available
         setTimeout(() => {
           if (this.glassSettings && this.glassThemes) {
@@ -229,9 +248,9 @@ class KanaAssistant {
       // Get stored YouTube API key
       const result = await chrome.storage.local.get(['youtubeApiKey']);
       const apiKey = result.youtubeApiKey;
-      
+
       this.liveYouTubeSearcher = new LiveYouTubeSearcher(apiKey);
-      
+
       if (apiKey) {
         this.log('Live YouTube Searcher initialized with API key - REAL search enabled');
       } else {
@@ -249,18 +268,18 @@ class KanaAssistant {
       const data = await loadDataFiles();
       this.glassThemes = data.glassThemes;
       this.subjectResources = data.subjectResources;
-      
+
       // Make themes globally available for Study Pouch
       window.glassThemes = this.glassThemes;
-      
+
       // Validate that glass themes were loaded correctly
       if (!this.glassThemes || Object.keys(this.glassThemes).length === 0) {
         this.glassThemes = this.getBuiltInGlassThemes();
         window.glassThemes = this.glassThemes;
       }
-      
+
       this.dataLoaded = true;
-      
+
       // Apply glass theme after data is loaded
       if (this.orb && this.chatPanel) {
         this.applyGlassTheme();
@@ -315,10 +334,12 @@ class KanaAssistant {
       // Disabled built-in speech recognition to avoid conflict with enhanced voice system
       // this.setupSpeechRecognition();
       this.setupEnhancedVoice();
+      this.setupVoiceResponse();
       this.loadPosition();
       this.setupMessageListener();
       this.loadGlassSettings();
       this.loadAdaptiveColorsSetting();
+      this.loadVoiceResponseSettings();
       this.log('Initialized successfully!');
     } catch (error) {
       this.log('Initialization failed', 'error');
@@ -341,10 +362,10 @@ class KanaAssistant {
   async loadGlassSettings() {
     try {
       const settings = await chrome.storage.local.get([
-        'glassColorPanel', 'glassColorOrb', 'glassOpacity', 
+        'glassColorPanel', 'glassColorOrb', 'glassOpacity',
         'glassBlur', 'glassSaturation', 'glassBrightness', 'glassDepth'
       ]);
-      
+
       this.glassSettings = {
         panelColor: settings.glassColorPanel || 'blue',
         orbColor: settings.glassColorOrb || 'blue',
@@ -354,7 +375,7 @@ class KanaAssistant {
         brightness: settings.glassBrightness || 105,
         depth: settings.glassDepth || 60
       };
-      
+
       // Wait for external data to be loaded before applying theme
       if (this.dataLoaded) {
         this.applyGlassTheme();
@@ -378,22 +399,22 @@ class KanaAssistant {
     if (!this.chatPanel || !this.orb || !this.dataLoaded || !this.glassThemes) {
       return;
     }
-    
+
     const panelTheme = this.glassThemes[this.glassSettings.panelColor];
     const orbTheme = this.glassThemes[this.glassSettings.orbColor];
-    
+
     if (!panelTheme || !orbTheme) {
       console.warn('Glass theme not found for colors:', this.glassSettings.panelColor, this.glassSettings.orbColor);
       return;
     }
-    
+
     // Apply panel theme with custom settings
     const opacityMultiplier = this.glassSettings.opacity / 100;
     const blur = this.glassSettings.blur;
     const saturation = this.glassSettings.saturation / 100;
     const brightness = this.glassSettings.brightness / 100;
     const depthMultiplier = this.glassSettings.depth / 100;
-    
+
     // Update panel styles
     this.chatPanel.style.background = panelTheme.panelBg;
     this.chatPanel.style.backdropFilter = `blur(${blur}px) brightness(${brightness}) saturate(${saturation})`;
@@ -405,7 +426,7 @@ class KanaAssistant {
       inset 0 1px 2px rgba(255, 255, 255, ${0.6 * opacityMultiplier}),
       inset 0 -1px 2px rgba(100, 160, 255, ${0.2 * opacityMultiplier})
     `;
-    
+
     // Update input styles
     const chatInput = this.chatPanel.querySelector('.kana-chat-input');
     if (chatInput) {
@@ -413,19 +434,41 @@ class KanaAssistant {
       chatInput.style.color = panelTheme.textColor;
       chatInput.style.backdropFilter = `blur(${blur * 0.8}px) saturate(${saturation})`;
     }
-    
+
     // Update response content styles
     const responseContent = this.chatPanel.querySelector('.kana-response-content');
     if (responseContent) {
       responseContent.style.color = panelTheme.textColor;
-      
+
       const headings = responseContent.querySelectorAll('h3');
       headings.forEach(h => h.style.color = panelTheme.textColor);
-      
+
       const paragraphs = responseContent.querySelectorAll('p, li');
       paragraphs.forEach(p => p.style.color = panelTheme.textColor);
     }
-    
+
+    // Update voice toggle styles
+    const voiceToggle = this.chatPanel.querySelector('.kana-voice-toggle');
+    if (voiceToggle) {
+      voiceToggle.style.color = panelTheme.textColor;
+      voiceToggle.style.backdropFilter = `blur(${blur * 0.5}px) saturate(${saturation})`;
+
+      // Apply active state styling if enabled
+      if (this.voiceResponseEnabled) {
+        voiceToggle.style.background = `linear-gradient(135deg, ${orbTheme.orbBg}88, ${orbTheme.orbBg}66)`;
+        voiceToggle.style.borderColor = `${orbTheme.orbBg}99`;
+      } else {
+        voiceToggle.style.background = `rgba(255, 255, 255, ${0.15 * opacityMultiplier})`;
+        voiceToggle.style.borderColor = `rgba(255, 255, 255, ${0.3 * opacityMultiplier})`;
+      }
+    }
+
+    // Update chat title styles
+    const chatTitle = this.chatPanel.querySelector('.kana-chat-title');
+    if (chatTitle) {
+      chatTitle.style.color = panelTheme.textColor;
+    }
+
     // Update orb styles with enhanced glassmorphism
     this.orb.style.background = `
       radial-gradient(circle at 30% 30%, rgba(255, 255, 255, ${0.25 * opacityMultiplier}) 0%, rgba(255, 255, 255, ${0.1 * opacityMultiplier}) 40%, transparent 70%),
@@ -442,7 +485,7 @@ class KanaAssistant {
     `;
     this.orb.style.backdropFilter = `blur(${2 * blur / 30}px) saturate(${saturation}) brightness(${brightness})`;
     this.orb.style.border = `1px solid rgba(255, 255, 255, ${0.4 * opacityMultiplier})`;
-    
+
     // Update YouTube PiP Manager theme if available
     if (this.youtubePiP && typeof this.youtubePiP.updateTheme === 'function') {
       this.youtubePiP.updateTheme(this.glassSettings.panelColor, this.glassThemes, this.glassSettings);
@@ -484,7 +527,7 @@ class KanaAssistant {
       });
       console.log('Study Pouch button created:', this.studyPouchButton);
 
-      this.orb.append(orbIcon, 
+      this.orb.append(orbIcon,
         this.createElement('div', { className: 'kana-voice-indicator' }),
         this.createElement('div', { className: 'kana-lock-icon', innerHTML: '🔒' }),
         this.studyPouchButton
@@ -494,17 +537,52 @@ class KanaAssistant {
 
       // Create chat panel components
       this.chatPanel = this.createElement('div', { className: 'kana-chat-panel' });
-      const chatResponseContent = this.createElement('div', { 
-        className: 'kana-response-content' 
+
+      // Create chat header with voice toggle
+      const chatHeader = this.createElement('div', { className: 'kana-chat-header' });
+      const chatTitle = this.createElement('div', {
+        className: 'kana-chat-title',
+        textContent: 'Kana AI Assistant'
+      });
+
+      // Create voice toggle button (for voice conversation)
+      this.voiceToggleButton = this.createElement('button', {
+        className: 'kana-voice-toggle',
+        'aria-label': 'Start voice conversation',
+        title: 'Start voice conversation with Kana',
+        innerHTML: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>`
+      });
+
+      // Create reading toggle button (for text-to-speech)
+      this.readingToggleButton = this.createElement('button', {
+        className: 'kana-reading-toggle',
+        'aria-label': 'Read response aloud',
+        title: 'Read response aloud',
+        innerHTML: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
+          <polygon points="11 5,6 9,2 9,2 15,6 15,11 19,11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>`
+      });
+
+      chatHeader.append(chatTitle, this.readingToggleButton, this.voiceToggleButton);
+      this.chatPanel.appendChild(chatHeader);
+
+      const chatResponseContent = this.createElement('div', {
+        className: 'kana-response-content'
       }, { display: 'none' });
       this.chatPanel.appendChild(chatResponseContent);
-      
+
       const chatInput = this.createElement('textarea', {
         className: 'kana-chat-input',
         placeholder: 'Ask Kana about what you\'re learning...',
         rows: 2
       });
-      
+
       const inputContainer = this.createElement('div', { className: 'kana-input-container' });
       const sendButton = this.createElement('button', {
         className: 'kana-send-button',
@@ -513,7 +591,7 @@ class KanaAssistant {
           <path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/>
         </svg>`
       });
-      
+
       inputContainer.append(chatInput, sendButton);
       this.chatPanel.appendChild(inputContainer);
 
@@ -523,7 +601,7 @@ class KanaAssistant {
       console.log('Orb container styles:', window.getComputedStyle(this.orbContainer));
       this.setPosition();
       console.log('Orb position set:', this.position);
-      
+
       // Apply theme after elements are created
       if (this.dataLoaded) {
         this.applyGlassTheme();
@@ -536,7 +614,7 @@ class KanaAssistant {
   setupEventListeners() {
     const chatInput = this.chatPanel.querySelector('.kana-chat-input');
     const sendButton = this.chatPanel.querySelector('.kana-send-button');
-    
+
     // Orb events
     this.addEvents(this.orb, {
       click: (e) => {
@@ -555,7 +633,7 @@ class KanaAssistant {
     // Study Pouch button event
     console.log('Setting up Study Pouch button event listener...');
     console.log('Study Pouch button element:', this.studyPouchButton);
-    
+
     if (this.studyPouchButton) {
       console.log('Adding click event listener to Study Pouch button');
       this.studyPouchButton.addEventListener('click', (e) => {
@@ -564,7 +642,7 @@ class KanaAssistant {
         e.stopPropagation();
         e.stopImmediatePropagation();
         console.log('Event propagation stopped');
-        
+
         if (this.studyPouch) {
           console.log('Study Pouch manager found, toggling...');
           this.studyPouch.toggle();
@@ -572,7 +650,7 @@ class KanaAssistant {
           console.error('Study Pouch manager not initialized!');
         }
       });
-      
+
       // Also add mousedown to catch the event earlier
       this.studyPouchButton.addEventListener('mousedown', (e) => {
         console.log('Study Pouch button mousedown!');
@@ -580,7 +658,7 @@ class KanaAssistant {
         e.stopPropagation();
         e.stopImmediatePropagation();
       });
-      
+
       console.log('Study Pouch button event listener added successfully');
     } else {
       console.error('Study Pouch button not found!');
@@ -606,13 +684,31 @@ class KanaAssistant {
       },
       keyup: (e) => e.stopPropagation()
     });
-    
+
     sendButton.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.sendChatMessage();
     });
-    
+
+    // Voice conversation button event (starts voice conversation mode)
+    if (this.voiceToggleButton) {
+      this.voiceToggleButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.startVoiceConversationMode();
+      });
+    }
+
+    // Reading toggle button event (reads current response aloud)
+    if (this.readingToggleButton) {
+      this.readingToggleButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleResponseReading();
+      });
+    }
+
     // Panel click handling
     this.addEvents(this.chatPanel, {
       click: (e) => e.stopPropagation()
@@ -642,7 +738,7 @@ class KanaAssistant {
 
   setupSpeechRecognition() {
     console.log('🎙️ Setting up speech recognition...');
-    
+
     // Check microphone permissions first
     if (navigator.permissions) {
       navigator.permissions.query({ name: 'microphone' }).then((result) => {
@@ -652,25 +748,25 @@ class KanaAssistant {
         }
       });
     }
-    
+
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       this.recognition = new SpeechRecognition();
-      
+
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
-      
+
       console.log('🎙️ Wake phrases configured:', this.wakePhrases);
-      
+
       this.recognition.onresult = this.handleSpeechResult.bind(this);
-      
+
       // Add interim results logging for debugging
       this.recognition.addEventListener('result', (event) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           const transcript = result[0].transcript;
-          
+
           if (result.isFinal) {
             console.log('🎙️ Final transcript:', transcript);
           } else {
@@ -696,7 +792,7 @@ class KanaAssistant {
           }, 1000);
         }
       };
-      
+
       this.recognition.onerror = (event) => {
         // Only log non-routine errors to reduce console noise
         switch (event.error) {
@@ -731,7 +827,7 @@ class KanaAssistant {
             setTimeout(() => this.startListening(), 5000);
         }
       };
-      
+
       this.startListening();
     } else {
       console.warn('Speech recognition not supported in this browser');
@@ -766,43 +862,43 @@ class KanaAssistant {
   handleSpeechResult(event) {
     const results = event.results;
     const lastResult = results[results.length - 1];
-    
+
     if (lastResult.isFinal) {
       const transcript = lastResult[0].transcript.toLowerCase().trim();
       console.log('🎙️ Speech recognized:', transcript);
-      
+
       // Check for wake phrase
-      const hasWakePhrase = this.wakePhrases.some(phrase => 
+      const hasWakePhrase = this.wakePhrases.some(phrase =>
         transcript.includes(phrase)
       );
-      
+
       console.log('🎙️ Wake phrase detected:', hasWakePhrase);
-      
+
       if (hasWakePhrase) {
         // Visual feedback - pulse the orb
         this.orb.classList.add('wake-triggered');
         setTimeout(() => {
           this.orb.classList.remove('wake-triggered');
         }, 1000);
-        
+
         // Extract the question after wake phrase
         let question = transcript;
         this.wakePhrases.forEach(phrase => {
           question = question.replace(phrase, '').trim();
         });
-        
+
         if (question.length > 0) {
           this.playAudioFeedback('wake');
-          
+
           if (!this.chatPanel.classList.contains('visible')) {
             this.showChatPanel();
           }
-          
+
           this.processVoiceCommand(question);
         } else {
           this.playAudioFeedback('wake-short');
           this.showChatPanel();
-          
+
           // Show welcome message
           const responseContent = this.chatPanel.querySelector('.kana-response-content');
           responseContent.style.display = 'block';
@@ -824,15 +920,15 @@ class KanaAssistant {
     try {
       // Simple audio feedback using AudioContext API
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      
+
       // Create oscillator for the sound
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-      
+
       // Connect nodes
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
-      
+
       // Configure based on feedback type
       switch (type) {
         case 'wake':
@@ -845,7 +941,7 @@ class KanaAssistant {
           oscillator.start();
           oscillator.stop(audioContext.currentTime + 0.3);
           break;
-        
+
         case 'wake-short':
           // Short acknowledgment
           oscillator.type = 'sine';
@@ -855,7 +951,7 @@ class KanaAssistant {
           oscillator.start();
           oscillator.stop(audioContext.currentTime + 0.1);
           break;
-          
+
         case 'thinking':
           // Low subtle sound
           oscillator.type = 'sine';
@@ -865,7 +961,7 @@ class KanaAssistant {
           oscillator.start();
           oscillator.stop(audioContext.currentTime + 0.2);
           break;
-          
+
         case 'response':
           // Completion sound
           oscillator.type = 'sine';
@@ -886,33 +982,33 @@ class KanaAssistant {
     try {
       // Make kanaAssistant globally available for voice enhancement
       window.kanaAI = this;
-      
+
       // Initialize enhanced voice recognition if available
       if (window.KanaVoiceRecognition) {
         console.log('🎤 Initializing Enhanced Voice Recognition with Push-to-Talk...');
-        
+
         // Create enhanced voice recognition instance with push-to-talk mode
         this.enhancedVoice = new window.KanaVoiceRecognition();
         this.enhancedVoice.setPushToTalkMode(true);
-        
+
         // Set up callbacks for voice recognition
         this.enhancedVoice.onFinalTranscript = (transcript, confidence) => {
           console.log('🎤 Voice transcript received:', transcript);
-          
+
           // Apply transcript corrections for technical terms
           const correctedTranscript = this.correctTechnicalTerms(transcript);
           if (correctedTranscript !== transcript) {
             console.log('🎤 Transcript corrected:', transcript, '->', correctedTranscript);
           }
-          
+
           this.handleVoiceCommand(correctedTranscript);
         };
-        
+
         this.enhancedVoice.onError = (error) => {
           console.error('🎤 Voice recognition error:', error);
           this.updateOrbState('idle');
         };
-        
+
         this.enhancedVoice.onStatusChange = (status) => {
           console.log('🎤 Voice status changed:', status);
           if (status === 'listening') {
@@ -921,21 +1017,21 @@ class KanaAssistant {
             this.updateOrbState('idle');
           }
         };
-        
+
         // Set up push-to-talk hotkey (Ctrl + Space)
         this.setupPushToTalkHotkey();
-        
+
         console.log('✅ Push-to-Talk Voice Recognition initialized (Ctrl + Space)');
       } else {
         console.log('📢 Enhanced Voice Recognition not available, using basic speech recognition');
       }
-      
+
       // Initialize voice integration if available
       if (window.KanaVoiceIntegration) {
         console.log('🔗 Initializing Voice Integration...');
         this.voiceIntegration = new window.KanaVoiceIntegration();
       }
-      
+
     } catch (error) {
       console.error('Error setting up enhanced voice:', error);
       // Don't fallback to continuous listening
@@ -945,7 +1041,7 @@ class KanaAssistant {
 
   setupPushToTalkHotkey() {
     this.isRecording = false;
-    
+
     document.addEventListener('keydown', (event) => {
       // Check if Ctrl + Space is pressed
       if (event.ctrlKey && event.code === 'Space' && !this.isRecording) {
@@ -953,7 +1049,7 @@ class KanaAssistant {
         this.startVoiceRecording();
       }
     });
-    
+
     document.addEventListener('keyup', (event) => {
       // Check if Ctrl or Space is released
       if ((event.ctrlKey === false || event.code === 'Space') && this.isRecording) {
@@ -961,9 +1057,9 @@ class KanaAssistant {
         this.stopVoiceRecording();
       }
     });
-    
+
     console.log('🎤 Push-to-Talk hotkey setup complete (Ctrl + Space)');
-    
+
     // Show initial instruction
     setTimeout(() => {
       this.showVoiceInstructions();
@@ -1001,7 +1097,7 @@ class KanaAssistant {
       <div>Hold <strong>Ctrl + Space</strong> to record voice commands</div>
       <div style="margin-top: 8px; font-size: 12px; opacity: 0.9;">Click to dismiss</div>
     `;
-    
+
     instructions.addEventListener('click', () => {
       instructions.style.opacity = '0';
       instructions.style.transform = 'translateX(-50%) translateY(-20px)';
@@ -1011,15 +1107,15 @@ class KanaAssistant {
         }
       }, 300);
     });
-    
+
     document.body.appendChild(instructions);
-    
+
     // Animate in
     setTimeout(() => {
       instructions.style.opacity = '1';
       instructions.style.transform = 'translateX(-50%) translateY(0)';
     }, 100);
-    
+
     // Auto-hide after 8 seconds
     setTimeout(() => {
       if (instructions.parentNode) {
@@ -1036,12 +1132,12 @@ class KanaAssistant {
 
   async startVoiceRecording() {
     if (this.isRecording || !this.enhancedVoice) return;
-    
+
     try {
       this.isRecording = true;
       console.log('🎤 Starting voice recording...');
       await this.enhancedVoice.startListening();
-      
+
       // Visual feedback
       this.showPushToTalkIndicator();
     } catch (error) {
@@ -1053,12 +1149,12 @@ class KanaAssistant {
 
   async stopVoiceRecording() {
     if (!this.isRecording || !this.enhancedVoice) return;
-    
+
     try {
       this.isRecording = false;
       console.log('🎤 Stopping voice recording...');
       await this.enhancedVoice.stopListening();
-      
+
       // Hide visual feedback
       this.hidePushToTalkIndicator();
     } catch (error) {
@@ -1096,7 +1192,7 @@ class KanaAssistant {
         <div style="width: 8px; height: 8px; background: white; border-radius: 50%; animation: blink 1s ease-in-out infinite;"></div>
         Recording... (Release Ctrl+Space to stop)
       `;
-      
+
       // Add CSS animations
       const style = document.createElement('style');
       style.textContent = `
@@ -1125,9 +1221,9 @@ class KanaAssistant {
   // Correct common voice transcription errors for technical terms
   correctTechnicalTerms(transcript) {
     if (!transcript) return transcript;
-    
+
     let corrected = transcript;
-    
+
     // Technical term corrections
     const corrections = {
       // VR/3D Terms
@@ -1139,7 +1235,7 @@ class KanaAssistant {
       'six dof': '6DOF',
       'vr headset': 'VR headset',
       'ar headset': 'AR headset',
-      
+
       // Unity Terms
       'game object': 'GameObject',
       'game objects': 'GameObjects',
@@ -1151,7 +1247,7 @@ class KanaAssistant {
       'mono behaviour': 'MonoBehaviour',
       'transform component': 'Transform component',
       'rigid body': 'Rigidbody',
-      
+
       // Programming Terms
       'object oriented': 'object-oriented',
       'oop': 'OOP',
@@ -1163,30 +1259,30 @@ class KanaAssistant {
       'javascript': 'JavaScript',
       'c sharp': 'C#',
       'c plus plus': 'C++',
-      
+
       // Common Misheard Words
       'can i have': 'can you help with',
       'i need you to explain': 'explain',
       'what do you mean by': 'what is',
       'i don\'t understand': 'explain'
     };
-    
+
     // Apply corrections (case-insensitive)
     for (const [wrong, right] of Object.entries(corrections)) {
       const regex = new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
       corrected = corrected.replace(regex, right);
     }
-    
+
     // Clean up extra spaces and punctuation
     corrected = corrected.replace(/\s+/g, ' ').trim();
-    
+
     return corrected;
   }
 
   // Correct common speech recognition errors for technical terms (all domains)
   correctTechnicalTerms(transcript) {
     let corrected = transcript;
-    
+
     // Comprehensive technical term corrections across all domains
     const corrections = {
       // Programming Languages
@@ -1198,7 +1294,7 @@ class KanaAssistant {
       'python three': 'Python 3',
       'c plus plus': 'C++',
       'see plus plus': 'C++',
-      
+
       // Web Development
       'html five': 'HTML5',
       'css three': 'CSS3',
@@ -1209,7 +1305,7 @@ class KanaAssistant {
       'api': 'API',
       'json': 'JSON',
       'ajax': 'AJAX',
-      
+
       // Data Science & AI
       'machine learning': 'machine learning',
       'neural network': 'neural network',
@@ -1222,7 +1318,7 @@ class KanaAssistant {
       'numpy': 'NumPy',
       'scikit learn': 'scikit-learn',
       'sk learn': 'scikit-learn',
-      
+
       // Game Development & VR/AR
       '3d wife': '3DOF',
       '3d wifes': '3DOF',
@@ -1242,21 +1338,21 @@ class KanaAssistant {
       'virtual reality': 'VR',
       'augmented reality': 'AR',
       'mixed reality': 'MR',
-      
+
       // Mobile Development
       'i o s': 'iOS',
       'android studio': 'Android Studio',
       'react native': 'React Native',
       'flutter': 'Flutter',
       'xamarin': 'Xamarin',
-      
+
       // Database
       'my sequel': 'MySQL',
       'post gray sequel': 'PostgreSQL',
       'sequel server': 'SQL Server',
       'no sequel': 'NoSQL',
       'mongo db': 'MongoDB',
-      
+
       // DevOps & Cloud
       'docker': 'Docker',
       'cuber net is': 'Kubernetes',
@@ -1269,7 +1365,7 @@ class KanaAssistant {
       'continuous integration': 'CI',
       'continuous deployment': 'CD',
       'ci cd': 'CI/CD',
-      
+
       // General Programming
       'object oriented': 'object-oriented',
       'get hub': 'GitHub',
@@ -1279,7 +1375,7 @@ class KanaAssistant {
       'vs code': 'VS Code',
       'integrated development environment': 'IDE',
       'application programming interface': 'API',
-      
+
       // Cybersecurity
       'encryption': 'encryption',
       'two factor authentication': '2FA',
@@ -1287,7 +1383,7 @@ class KanaAssistant {
       'transport layer security': 'TLS',
       'virtual private network': 'VPN',
       'fire wall': 'firewall',
-      
+
       // UI/UX Design
       'user interface': 'UI',
       'user experience': 'UX',
@@ -1297,7 +1393,7 @@ class KanaAssistant {
       'figma': 'Figma',
       'adobe x d': 'Adobe XD',
       'oop': 'OOP',
-      
+
       // VR terms
       'vr controller': 'VR controller',
       'virtual reality': 'VR',
@@ -1305,42 +1401,42 @@ class KanaAssistant {
       'oculus': 'Oculus',
       'meta quest': 'Meta Quest'
     };
-    
+
     // Apply corrections (case-insensitive)
     for (const [wrong, right] of Object.entries(corrections)) {
       const regex = new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
       corrected = corrected.replace(regex, right);
     }
-    
+
     // Fix common punctuation issues
     corrected = corrected.replace(/\s+/g, ' ').trim();
-    
+
     return corrected;
   }
 
   // Handle voice commands from speech recognition
   handleVoiceCommand(transcript) {
     console.log('🎤 Processing voice command:', transcript);
-    
+
     // Clean up the transcript
     const command = transcript.toLowerCase().trim();
-    
+
     if (!command) {
       console.log('🎤 Empty command, ignoring');
       return;
     }
-    
+
     // Show that we received the voice input
     this.showVoiceResponseIndicator(`You said: "${transcript}"`);
-    
+
     // Check for Study Pouch commands first
     if (this.handleStudyPouchCommand(transcript)) {
       return; // Command was handled, don't send to AI
     }
-    
+
     // Check for panel control commands
     const lowerMessage = transcript.toLowerCase().trim();
-    
+
     if (lowerMessage.includes('close') || lowerMessage.includes('hide')) {
       this.hidePanels();
       this.showResponse({
@@ -1350,20 +1446,20 @@ class KanaAssistant {
       });
       return;
     }
-    
+
     if (lowerMessage.includes('open chat') || lowerMessage.includes('show chat')) {
       this.showChatPanel();
       return;
     }
-    
+
     // Automatically process the voice command with AI
     console.log('🎤 Auto-processing voice command with AI:', transcript);
-    
+
     // Ensure the chat panel is visible to show the response
     if (!this.chatPanel.classList.contains('visible')) {
       this.showChatPanel();
     }
-    
+
     // Process the message with AI immediately
     this.analyzeScreenContent(transcript);
   }
@@ -1397,11 +1493,11 @@ class KanaAssistant {
       `;
       document.body.appendChild(indicator);
     }
-    
+
     indicator.textContent = message;
     indicator.style.opacity = '1';
     indicator.style.transform = 'translateX(0)';
-    
+
     // Hide after 3 seconds
     setTimeout(() => {
       indicator.style.opacity = '0';
@@ -1412,41 +1508,2778 @@ class KanaAssistant {
   processVoiceCommand(command = '') {
     this.updateOrbState('thinking');
     this.playAudioFeedback('thinking');
-    
+
     // Display in input area what was heard
     const chatInput = this.chatPanel.querySelector('.kana-chat-input');
     chatInput.value = command;
-    
+
     // Analyze screen content with this command
     this.analyzeScreenContent(command);
+  }
+
+  // Voice Response Methods
+  setupVoiceResponse() {
+    console.log('🔊 Setting up voice response system...');
+    try {
+      if ('speechSynthesis' in window) {
+        this.speechSynthesis = window.speechSynthesis;
+        console.log('🔊 Voice response system initialized');
+        this.log('🔊 Voice response system initialized');
+
+        // Get available voices when they're loaded
+        if (this.speechSynthesis.getVoices().length === 0) {
+          console.log('🔊 Waiting for voices to load...');
+          this.speechSynthesis.addEventListener('voiceschanged', () => {
+            this.selectBestFemaleVoice();
+            console.log(`🔊 Found ${this.speechSynthesis.getVoices().length} available voices`);
+            this.log(`🔊 Found ${this.speechSynthesis.getVoices().length} available voices`);
+          });
+        } else {
+          console.log(`🔊 Found ${this.speechSynthesis.getVoices().length} voices immediately`);
+          this.selectBestFemaleVoice();
+        }
+      } else {
+        console.log('❌ Speech synthesis not supported in this browser');
+        this.log('❌ Speech synthesis not supported in this browser', 'warn');
+        this.voiceResponseEnabled = false;
+      }
+    } catch (error) {
+      console.log(`❌ Failed to setup voice response: ${error.message}`);
+      this.log(`❌ Failed to setup voice response: ${error.message}`, 'error');
+      this.voiceResponseEnabled = false;
+    }
+  }
+
+  selectBestFemaleVoice() {
+    console.log('🔊 Selecting best female voice...');
+    const voices = this.speechSynthesis.getVoices();
+    console.log(`🔊 Available voices: ${voices.length}`, voices.map(v => v.name));
+
+    // Priority order for female voices (more natural sounding first)
+    const femaleVoiceNames = [
+      'Google US English Female',
+      'Microsoft Zira Desktop',
+      'Microsoft Zira',
+      'Samantha',
+      'Karen',
+      'Moira',
+      'Tessa',
+      'Veena',
+      'Fiona',
+      'female'
+    ];
+
+    // Find the best available female voice
+    for (const voiceName of femaleVoiceNames) {
+      const voice = voices.find(v =>
+        v.name.toLowerCase().includes(voiceName.toLowerCase()) ||
+        v.name.toLowerCase().includes('female')
+      );
+      if (voice) {
+        this.selectedVoice = voice;
+        console.log(`🔊 Selected voice: ${voice.name} (${voice.lang})`);
+        this.log(`🔊 Selected voice: ${voice.name} (${voice.lang})`);
+        return;
+      }
+    }
+
+    // Fallback: find any female voice
+    const femaleVoice = voices.find(v =>
+      v.name.toLowerCase().includes('female') ||
+      v.name.toLowerCase().includes('woman') ||
+      v.name.toLowerCase().includes('zira') ||
+      v.name.toLowerCase().includes('samantha')
+    );
+
+    if (femaleVoice) {
+      this.selectedVoice = femaleVoice;
+      console.log(`🔊 Selected fallback female voice: ${femaleVoice.name}`);
+      this.log(`🔊 Selected fallback female voice: ${femaleVoice.name}`);
+    } else {
+      // Last resort: use default voice
+      this.selectedVoice = voices[0] || null;
+      console.log(`🔊 Using default voice: ${this.selectedVoice?.name || 'system default'}`);
+      this.log(`🔊 Using default voice: ${this.selectedVoice?.name || 'system default'}`);
+    }
+
+    // Force voice selection if none found
+    if (!this.selectedVoice && voices.length > 0) {
+      this.selectedVoice = voices[0];
+      console.log(`🔊 Forced to use first available voice: ${this.selectedVoice.name}`);
+    }
+  }
+
+  async loadVoiceResponseSettings() {
+    try {
+      const settings = await chrome.storage.local.get(['kanaVoiceResponseEnabled']);
+      this.voiceResponseEnabled = settings.kanaVoiceResponseEnabled !== undefined ?
+        settings.kanaVoiceResponseEnabled : true; // Default to enabled
+
+      this.updateVoiceToggleUI();
+      this.log(`🔊 Voice response ${this.voiceResponseEnabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      this.log('Error loading voice response settings:', error);
+      this.voiceResponseEnabled = true; // Default to enabled
+      this.updateVoiceToggleUI();
+    }
+  }
+
+  // Start voice conversation mode (switches to voice UI)
+  startVoiceConversationMode() {
+    console.log('🎤 Starting voice conversation mode');
+    this.voiceResponseEnabled = true;
+    this.switchToVoiceUI();
+  }
+
+  // Toggle reading the current response aloud
+  toggleResponseReading() {
+    console.log('🔊 Toggling response reading');
+
+    // If currently speaking, stop it
+    if (this.isSpeaking) {
+      this.stopSpeaking();
+      this.updateReadingButton(false);
+      return;
+    }
+
+    // Get the current response text
+    const responseContent = document.querySelector('.kana-response-content');
+    if (!responseContent || !responseContent.textContent.trim()) {
+      this.log('No response to read', 'warn');
+      return;
+    }
+
+    // Start reading the response
+    this.readResponseAloud(responseContent.textContent.trim());
+  }
+
+  // Read response text aloud
+  async readResponseAloud(text) {
+    console.log('🔊 Reading response aloud:', text.substring(0, 50) + '...');
+
+    if (!this.speechSynthesis || !text) {
+      console.log('❌ Speech synthesis not available or no text');
+      return;
+    }
+
+    try {
+      // Stop any current speech
+      this.stopSpeaking();
+
+      // Update button to show speaking state
+      this.updateReadingButton(true);
+
+      // Clean the text for better speech synthesis
+      const cleanedText = this.prepareTextForSpeech(text);
+
+      // Create speech utterance
+      this.currentSpeech = new SpeechSynthesisUtterance(cleanedText);
+      this.currentSpeechType = 'reading';
+
+      // Configure voice settings
+      this.configureSpeechVoice(this.currentSpeech);
+
+      // Set up event handlers
+      this.currentSpeech.onstart = () => {
+        this.isSpeaking = true;
+        this.updateOrbState('speaking');
+        this.log('🔊 Started reading response');
+      };
+
+      this.currentSpeech.onend = () => {
+        this.isSpeaking = false;
+        this.updateOrbState('idle');
+        this.currentSpeech = null;
+        this.currentSpeechType = null;
+        this.log('🔊 Finished reading response');
+        this.updateReadingButton(false);
+      };
+
+      this.currentSpeech.onerror = (error) => {
+        this.isSpeaking = false;
+        this.updateOrbState('idle');
+        this.currentSpeech = null;
+        this.currentSpeechType = null;
+        this.log(`❌ Speech error: ${error.error}`, 'error');
+        this.updateReadingButton(false);
+      };
+
+      // Speak the response
+      this.speechSynthesis.speak(this.currentSpeech);
+
+    } catch (error) {
+      console.log(`❌ Reading error: ${error.message}`);
+      this.updateReadingButton(false);
+    }
+  }
+
+  // Update reading button appearance
+  updateReadingButton(isSpeaking) {
+    if (!this.readingToggleButton) return;
+
+    if (isSpeaking) {
+      this.readingToggleButton.classList.add('speaking');
+      this.readingToggleButton.title = 'Stop reading';
+      this.readingToggleButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
+        <rect x="6" y="4" width="4" height="16"/>
+        <rect x="14" y="4" width="4" height="16"/>
+      </svg>`;
+    } else {
+      this.readingToggleButton.classList.remove('speaking');
+      this.readingToggleButton.title = 'Read response aloud';
+      this.readingToggleButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
+        <polygon points="11 5,6 9,2 9,2 15,6 15,11 19,11 5"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+      </svg>`;
+    }
+  }
+
+  async toggleVoiceResponse() {
+    console.log('🔊 Voice toggle clicked! Current state:', this.voiceResponseEnabled);
+    this.voiceResponseEnabled = !this.voiceResponseEnabled;
+    console.log('🔊 New voice state:', this.voiceResponseEnabled);
+
+    // Stop any current speech
+    if (this.isSpeaking) {
+      this.stopSpeaking();
+    }
+
+    // Save setting
+    try {
+      await chrome.storage.local.set({ kanaVoiceResponseEnabled: this.voiceResponseEnabled });
+      this.log(`🔊 Voice response ${this.voiceResponseEnabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      this.log('Error saving voice response setting:', error);
+    }
+
+    this.updateVoiceToggleUI();
+
+    // Show feedback
+    this.showVoiceToggleFeedback();
+
+    // Switch to voice UI mode if enabled
+    if (this.voiceResponseEnabled) {
+      console.log('🎤 About to switch to Voice UI...');
+      setTimeout(() => {
+        console.log('🎤 Executing switchToVoiceUI...');
+        this.switchToVoiceUI();
+      }, 500); // Small delay for smooth transition
+    } else {
+      console.log('💬 Switching to Text UI...');
+      this.switchToTextUI();
+    }
+  }
+
+  updateVoiceToggleUI() {
+    if (!this.voiceToggleButton) return;
+
+    if (this.voiceResponseEnabled) {
+      this.voiceToggleButton.classList.add('active');
+      this.voiceToggleButton.title = 'Voice responses enabled - Click to disable';
+    } else {
+      this.voiceToggleButton.classList.remove('active');
+      this.voiceToggleButton.title = 'Voice responses disabled - Click to enable';
+    }
+
+    // Apply current theme to the toggle button
+    this.applyGlassTheme();
+  }
+
+  switchToVoiceUI() {
+    console.log('🎤 switchToVoiceUI called');
+    this.isInVoiceMode = true;
+    console.log('🎤 Set isInVoiceMode to true');
+
+    // IMPORTANT: Ensure voice response is enabled when entering voice mode
+    if (!this.voiceResponseEnabled) {
+      console.log('🔊 Auto-enabling voice response for voice mode');
+      this.voiceResponseEnabled = true;
+      this.updateVoiceToggleUI();
+      // Save the setting
+      chrome.storage.local.set({ kanaVoiceResponseEnabled: true }).catch(e =>
+        console.log('Failed to save voice setting:', e)
+      );
+    }
+
+    // Hide the chat panel
+    this.hidePanels();
+    console.log('🎤 Chat panels hidden');
+
+    // Create and show voice UI
+    this.createVoiceUI();
+    console.log('🎤 Voice UI created');
+
+    this.startVoiceConversation();
+    console.log('🎤 Voice conversation started');
+
+    this.log('🎤 Switched to Voice UI mode');
+  }
+
+  switchToTextUI() {
+    console.log('💬 switchToTextUI called');
+    this.isInVoiceMode = false;
+    this.stopVoiceConversation();
+    this.hideVoiceUI();
+    this.log('💬 Switched to Text UI mode');
+  }
+
+  createVoiceUI() {
+    console.log('🎤 createVoiceUI called');
+
+    // Remove existing voice UI if any
+    if (this.voiceUI) {
+      console.log('🎤 Removing existing voice UI');
+      this.voiceUI.remove();
+    }
+
+    this.voiceUI = this.createElement('div', {
+      className: 'kana-voice-ui'
+    });
+
+    // Initialize UI state - start tiny by default
+    this.voiceUISize = 'tiny'; // tiny, small, medium, large
+    this.voiceUIPosition = { x: window.innerWidth - 70, y: 50 };
+    this.isExpanded = false;
+    this.isDraggingVoiceUI = false;
+
+    this.voiceUI.innerHTML = `
+      <div class="kana-voice-compact">
+        <div class="kana-voice-avatar-tiny">
+          <div class="kana-voice-status-dot"></div>
+        </div>
+        <div class="kana-voice-rings-compact">
+          <div class="kana-voice-ring-compact"></div>
+          <div class="kana-voice-ring-compact"></div>
+        </div>
+        <div class="kana-voice-audio-bars-compact">
+          <div class="audio-bar"></div>
+          <div class="audio-bar"></div>
+          <div class="audio-bar"></div>
+          <div class="audio-bar"></div>
+        </div>
+      </div>
+      
+      <div class="kana-voice-expanded" style="display: none;">
+        <div class="kana-voice-header-minimal">
+          <button class="kana-voice-minimize">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 0 2-2h3M3 16h3a2 2 0 0 0 2 2v3"/>
+            </svg>
+          </button>
+          <button class="kana-voice-close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="kana-voice-content">
+          <div class="kana-voice-avatar-expanded">
+            <div class="kana-voice-avatar-inner">
+            </div>
+            <div class="kana-voice-rings-expanded">
+              <div class="kana-voice-ring"></div>
+              <div class="kana-voice-ring"></div>
+            </div>
+          </div>
+          
+          <div class="kana-voice-status">
+            <div class="kana-voice-status-text">Ready to help</div>
+          </div>
+          
+          <div class="kana-voice-audio-visualizer">
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+            <div class="audio-bar"></div>
+          </div>
+          
+          <div class="kana-voice-controls-expanded">
+            <button class="kana-voice-conversation-toggle" title="Toggle Voice Conversation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+            <button class="kana-voice-conversation-pause" title="Pause Speech" style="display: none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="6" y="4" width="4" height="16"/>
+                <rect x="14" y="4" width="4" height="16"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <div class="kana-voice-conversation-mini"></div>
+      </div>
+    `;
+
+    // Apply theme and positioning
+    this.applyVoiceUITheme();
+    this.applyVoiceUIPosition();
+
+    document.body.appendChild(this.voiceUI);
+    this.setupVoiceUIEvents();
+
+    // Initialize button states
+    this.updateVoiceControlButtons();
+
+    // Show with animation
+    requestAnimationFrame(() => {
+      this.voiceUI.classList.add('visible');
+    });
+
+    console.log('🎤 Tiny Voice UI created');
+
+    // Animate in
+    console.log('🎤 Animating voice UI in');
+    setTimeout(() => {
+      this.voiceUI.classList.add('visible');
+      console.log('🎤 Voice UI should now be visible');
+
+      // Simple greeting when UI becomes visible
+      setTimeout(() => {
+        console.log('🔊 Simple greeting when voice UI becomes visible');
+        if (this.speechSynthesis && this.selectedVoice) {
+          const greeting = "How can I help you?";
+          this.addToVoiceConversation('kana', greeting);
+          this.speakConversationalResponse(greeting);
+        } else {
+          console.log('❌ Voice test failed - speech synthesis or voice not available');
+          console.log('Speech synthesis:', !!this.speechSynthesis);
+          console.log('Selected voice:', this.selectedVoice);
+        }
+      }, 300);
+    }, 10);
+  }
+
+  applyVoiceUISize() {
+    if (!this.voiceUI) return;
+
+    const sizes = {
+      small: {
+        width: '96px',
+        height: '120px',
+        minWidth: '96px',
+        minHeight: '120px'
+      },
+      medium: {
+        width: '400px',
+        height: '300px',
+        minWidth: '300px',
+        minHeight: '200px'
+      },
+      large: {
+        width: '600px',
+        height: '500px',
+        minWidth: '400px',
+        minHeight: '300px'
+      }
+    };
+
+    const size = sizes[this.voiceUISize];
+    Object.assign(this.voiceUI.style, {
+      width: size.width,
+      height: size.height,
+      minWidth: size.minWidth,
+      minHeight: size.minHeight,
+      maxWidth: '80vw',
+      maxHeight: '80vh'
+    });
+
+    // Adjust content visibility based on size
+    const transcript = this.voiceUI.querySelector('.kana-voice-transcript');
+    const controls = this.voiceUI.querySelector('.kana-voice-controls');
+    const status = this.voiceUI.querySelector('.kana-voice-status');
+
+    if (this.voiceUISize === 'small') {
+      transcript.style.display = 'none';
+      controls.style.display = 'none';
+      status.style.display = 'none';
+      this.voiceUI.classList.add('compact');
+    } else {
+      transcript.style.display = 'block';
+      controls.style.display = 'flex';
+      status.style.display = 'block';
+      this.voiceUI.classList.remove('compact');
+    }
+  }
+
+  applyVoiceUIPosition() {
+    if (!this.voiceUI) return;
+
+    // Ensure position is within viewport bounds
+    const maxX = window.innerWidth - parseInt(this.voiceUI.style.width) || window.innerWidth - 400;
+    const maxY = window.innerHeight - parseInt(this.voiceUI.style.height) || window.innerHeight - 300;
+
+    this.voiceUIPosition.x = Math.max(0, Math.min(this.voiceUIPosition.x, maxX));
+    this.voiceUIPosition.y = Math.max(0, Math.min(this.voiceUIPosition.y, maxY));
+
+    Object.assign(this.voiceUI.style, {
+      position: 'fixed',
+      left: `${this.voiceUIPosition.x}px`,
+      top: `${this.voiceUIPosition.y}px`,
+      zIndex: '2147483647'
+    });
+  }
+
+  cycleVoiceUISize() {
+    const sizes = ['small', 'medium', 'large'];
+    const currentIndex = sizes.indexOf(this.voiceUISize);
+    this.voiceUISize = sizes[(currentIndex + 1) % sizes.length];
+
+    console.log('🔄 Cycling voice UI size to:', this.voiceUISize);
+    this.applyVoiceUISize();
+    this.applyVoiceUIPosition(); // Reposition to ensure it stays in bounds
+  }
+
+  setupVoiceUIEvents() {
+    if (!this.voiceUI) return;
+
+    // Compact mode - click to expand
+    const compactAvatar = this.voiceUI.querySelector('.kana-voice-avatar-tiny');
+    if (compactAvatar) {
+      compactAvatar.addEventListener('click', () => {
+        this.toggleVoiceUIExpansion();
+      });
+      compactAvatar.style.cursor = 'pointer';
+    }
+
+    // Expanded mode controls
+    const minimizeBtn = this.voiceUI.querySelector('.kana-voice-minimize');
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', () => {
+        this.toggleVoiceUIExpansion();
+      });
+    }
+
+    // Close button
+    const closeBtn = this.voiceUI.querySelector('.kana-voice-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.voiceResponseEnabled = false;
+        this.switchToTextUI();
+        this.updateVoiceToggleUI();
+      });
+    }
+
+    // Voice controls
+    const testBtn = this.voiceUI.querySelector('.kana-voice-test');
+    if (testBtn) {
+      testBtn.addEventListener('click', () => {
+        this.speakConversationalResponse("How can I help you?");
+      });
+    }
+
+    // Conversational voice toggle
+    const conversationToggleBtn = this.voiceUI.querySelector('.kana-voice-conversation-toggle');
+    if (conversationToggleBtn) {
+      conversationToggleBtn.addEventListener('click', () => {
+        this.toggleConversationalVoice();
+      });
+    }
+
+    // Conversation pause button
+    const conversationPauseBtn = this.voiceUI.querySelector('.kana-voice-conversation-pause');
+    if (conversationPauseBtn) {
+      conversationPauseBtn.addEventListener('click', () => {
+        this.pauseConversationalSpeech();
+      });
+    }
+
+    // Pause voice button (legacy - keeping for compatibility)
+    const pauseBtn = this.voiceUI.querySelector('.kana-voice-pause');
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        this.pauseCurrentSpeech();
+      });
+    }
+
+    // Drag functionality for the entire UI
+    this.voiceUI.addEventListener('mousedown', this.startDragVoiceUI.bind(this));
+    document.addEventListener('mousemove', this.handleVoiceUIMouseMove.bind(this));
+    document.addEventListener('mouseup', this.handleVoiceUIMouseUp.bind(this));
+  }
+
+  applyVoiceUITheme() {
+    if (!this.voiceUI) return;
+
+    const panelTheme = this.glassThemes[this.glassSettings.panelColor];
+    const orbTheme = this.glassThemes[this.glassSettings.orbColor];
+
+    if (panelTheme && orbTheme) {
+      const opacityMultiplier = this.glassSettings.opacity / 100;
+      const blur = this.glassSettings.blur;
+      const saturation = this.glassSettings.saturation / 100;
+      const brightness = this.glassSettings.brightness / 100;
+
+      this.voiceUI.style.setProperty('--theme-bg', panelTheme.panelBg);
+      this.voiceUI.style.setProperty('--theme-border', panelTheme.panelBorder);
+      this.voiceUI.style.setProperty('--theme-text', panelTheme.textColor);
+      this.voiceUI.style.setProperty('--orb-bg', orbTheme.orbBg);
+      this.voiceUI.style.setProperty('--orb-shadow', orbTheme.orbShadow);
+      this.voiceUI.style.setProperty('--blur', `${blur}px`);
+      this.voiceUI.style.setProperty('--brightness', brightness);
+      this.voiceUI.style.setProperty('--saturation', saturation);
+    }
+  }
+
+  applyVoiceUIPosition() {
+    if (!this.voiceUI) return;
+
+    // Ensure position is within viewport bounds
+    const maxX = window.innerWidth - (this.isExpanded ? 280 : 60);
+    const maxY = window.innerHeight - (this.isExpanded ? 300 : 60);
+
+    this.voiceUIPosition.x = Math.max(10, Math.min(this.voiceUIPosition.x, maxX));
+    this.voiceUIPosition.y = Math.max(10, Math.min(this.voiceUIPosition.y, maxY));
+
+    this.voiceUI.style.left = `${this.voiceUIPosition.x}px`;
+    this.voiceUI.style.top = `${this.voiceUIPosition.y}px`;
+  }
+
+  toggleVoiceUIExpansion() {
+    if (!this.voiceUI) return;
+
+    this.isExpanded = !this.isExpanded;
+
+    const compact = this.voiceUI.querySelector('.kana-voice-compact');
+    const expanded = this.voiceUI.querySelector('.kana-voice-expanded');
+
+    if (this.isExpanded) {
+      compact.style.display = 'none';
+      expanded.style.display = 'flex';
+      this.voiceUI.classList.add('expanded');
+    } else {
+      compact.style.display = 'flex';
+      expanded.style.display = 'none';
+      this.voiceUI.classList.remove('expanded');
+    }
+
+    this.applyVoiceUIPosition(); // Reposition to stay in bounds
+  }
+
+  startDragVoiceUI(e) {
+    // Only start drag if clicking on draggable areas
+    if (e.target.closest('.kana-voice-close') ||
+      e.target.closest('.kana-voice-minimize') ||
+      e.target.closest('.kana-voice-test') ||
+      e.target.closest('.kana-voice-mute')) {
+      return; // Don't drag when clicking buttons
+    }
+
+    e.preventDefault();
+    this.isDraggingVoiceUI = true;
+    this.dragStartX = e.clientX - this.voiceUIPosition.x;
+    this.dragStartY = e.clientY - this.voiceUIPosition.y;
+    this.voiceUI.classList.add('dragging');
+    this.voiceUI.style.cursor = 'grabbing';
+  }
+
+  handleVoiceUIMouseMove(e) {
+    if (this.isDraggingVoiceUI) {
+      this.voiceUIPosition.x = e.clientX - this.dragStartX;
+      this.voiceUIPosition.y = e.clientY - this.dragStartY;
+      this.applyVoiceUIPosition();
+    }
+  }
+
+  handleVoiceUIMouseUp(e) {
+    if (this.isDraggingVoiceUI) {
+      this.isDraggingVoiceUI = false;
+      this.voiceUI.classList.remove('dragging');
+      this.voiceUI.style.cursor = '';
+    }
+  }
+
+  hideVoiceUI() {
+    if (this.voiceUI) {
+      this.voiceUI.classList.remove('visible');
+      setTimeout(() => {
+        if (this.voiceUI && this.voiceUI.parentNode) {
+          this.voiceUI.parentNode.removeChild(this.voiceUI);
+        }
+        this.voiceUI = null;
+      }, 300);
+    }
+  }
+
+  // Ensure voice context memory is always initialized
+  ensureVoiceContextMemory() {
+    if (!this.voiceContextMemory || typeof this.voiceContextMemory !== 'object') {
+      this.voiceContextMemory = {
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        previousTopics: [],
+        screenReferences: [],
+        lastMentionedContent: null,
+        conversationStarted: false,
+        firstInteraction: true
+      };
+    }
+  }
+
+  startVoiceConversation() {
+    if (this.voiceConversationActive) return;
+
+    this.voiceConversationActive = true;
+
+    // Reset voice restart tracking when manually starting conversation
+    this.voiceRestartAttempts = 0;
+    if (this.voiceRestartTimeout) {
+      clearTimeout(this.voiceRestartTimeout);
+      this.voiceRestartTimeout = null;
+    }
+
+    // Ensure voice synthesis is available
+    this.ensureVoiceSynthesisReady();
+
+    this.voiceConversationHistory = []; // Track conversation history
+    this.ensureVoiceContextMemory();
+
+    this.setupContinuousListening();
+    this.updateVoiceStatus('Listening... Say something to Kana');
+
+    // Give a simple, natural greeting
+    setTimeout(() => {
+      const greeting = "How can I help you?";
+      this.addToVoiceConversation('kana', greeting);
+      this.speakConversationalResponse(greeting);
+      this.ensureVoiceContextMemory();
+      this.voiceContextMemory.conversationStarted = true;
+    }, 500);
+
+    this.log('🎤 Started continuous voice conversation');
+  }
+
+  ensureVoiceSynthesisReady() {
+    console.log('🔊 Ensuring voice synthesis is ready...');
+
+    // Initialize speech synthesis if not already done
+    if (!this.speechSynthesis && 'speechSynthesis' in window) {
+      console.log('🔊 Initializing speech synthesis...');
+      this.speechSynthesis = window.speechSynthesis;
+    }
+
+    // Check if we have voices available
+    if (this.speechSynthesis) {
+      const voices = this.speechSynthesis.getVoices();
+      console.log(`🔊 Available voices: ${voices.length}`);
+
+      // If no voices yet, wait for them
+      if (voices.length === 0) {
+        console.log('🔊 No voices available yet, waiting for voiceschanged event...');
+        this.speechSynthesis.addEventListener('voiceschanged', () => {
+          const newVoices = this.speechSynthesis.getVoices();
+          console.log(`🔊 Voices loaded: ${newVoices.length}`);
+          this.selectBestFemaleVoice();
+        }, { once: true });
+      } else {
+        console.log('🔊 Voices already available');
+        this.selectBestFemaleVoice();
+      }
+    } else {
+      console.log('❌ Speech synthesis not supported in this browser');
+    }
+
+    console.log('🔊 Voice synthesis check complete:', {
+      synthAvailable: !!this.speechSynthesis,
+      responseEnabled: this.voiceResponseEnabled,
+      selectedVoice: this.selectedVoice?.name || 'none'
+    });
+  }
+
+  // Debug method to test voice synthesis
+  testVoiceSynthesis() {
+    console.log('🔊 Testing voice synthesis...');
+
+    if (!this.speechSynthesis) {
+      console.log('❌ No speech synthesis available');
+      return false;
+    }
+
+    if (!this.voiceResponseEnabled) {
+      console.log('❌ Voice response disabled');
+      return false;
+    }
+
+    try {
+      const testUtterance = new SpeechSynthesisUtterance('Voice synthesis test');
+      testUtterance.volume = 0.5;
+      testUtterance.rate = 1.0;
+      testUtterance.pitch = 1.0;
+
+      if (this.selectedVoice) {
+        testUtterance.voice = this.selectedVoice;
+      }
+
+      testUtterance.onstart = () => console.log('🔊 Test speech started');
+      testUtterance.onend = () => console.log('🔊 Test speech ended');
+      testUtterance.onerror = (e) => console.log('❌ Test speech error:', e);
+
+      this.speechSynthesis.speak(testUtterance);
+      console.log('🔊 Test speech synthesis triggered');
+      return true;
+    } catch (error) {
+      console.log('❌ Voice synthesis test failed:', error);
+      return false;
+    }
+  }
+
+  stopVoiceConversation() {
+    this.voiceConversationActive = false;
+
+    // Clean up restart tracking
+    this.voiceRestartAttempts = 0;
+    if (this.voiceRestartTimeout) {
+      clearTimeout(this.voiceRestartTimeout);
+      this.voiceRestartTimeout = null;
+    }
+
+    this.stopContinuousListening();
+    this.updateVoiceStatus('Conversation ended');
+    this.log('🎤 Stopped voice conversation');
+  }
+
+  setupContinuousListening() {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      this.updateVoiceStatus('Voice recognition not supported');
+      return;
+    }
+
+    // Don't start if voice recognition is paused (during speech)
+    if (this.voiceRecognitionPaused) {
+      console.log('🔇 Skipping voice recognition setup - currently paused');
+      return;
+    }
+
+    // Don't start if already speaking
+    if (this.isSpeaking) {
+      console.log('🔇 Skipping voice recognition setup - currently speaking');
+      return;
+    }
+
+    // Don't start if conversation is not active
+    if (!this.voiceConversationActive) {
+      console.log('🔇 Skipping voice recognition setup - conversation not active');
+      return;
+    }
+
+    // Stop existing recognition first and wait
+    if (this.voiceRecognition) {
+      try {
+        console.log('🛑 Stopping existing voice recognition');
+        this.voiceRecognition.abort(); // Use abort to force stop
+        this.voiceRecognition = null;
+      } catch (e) {
+        console.log('Previous voice recognition already stopped');
+      }
+
+      // Wait a bit before creating new instance
+      setTimeout(() => {
+        this.createVoiceRecognition();
+      }, 300); // Increased delay to prevent conflicts
+      return;
+    }
+
+    this.createVoiceRecognition();
+  }
+
+  createVoiceRecognition() {
+    // Double check we're still active before creating
+    if (!this.voiceConversationActive || this.voiceRecognitionPaused || this.isSpeaking) {
+      console.log('🔇 Aborting voice recognition creation - state changed');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    this.voiceRecognition = new SpeechRecognition();
+
+    this.voiceRecognition.continuous = true;
+    this.voiceRecognition.interimResults = true;
+    this.voiceRecognition.lang = 'en-US';
+    this.voiceRecognition.maxAlternatives = 1; // Faster processing
+
+    this.voiceRecognition.onstart = () => {
+      console.log('🎤 Voice recognition started');
+      this.updateVoiceStatus('Listening...');
+      this.animateVoiceVisualizer(true);
+    };
+
+    this.voiceRecognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // ALWAYS check for interrupt commands first, even during speech
+      const fullTranscript = (finalTranscript || interimTranscript).toLowerCase();
+      if (fullTranscript.includes('stop') || fullTranscript.includes('pause') ||
+        fullTranscript.includes('quiet') || fullTranscript.includes('silence')) {
+        console.log('🛑 Stop/Pause command detected - interrupting speech');
+        this.handleInterruptCommand();
+        return;
+      }
+
+      // Skip other processing if we're paused (during speech) but not for stop commands
+      if (this.voiceRecognitionPaused || this.isSpeaking) {
+        console.log('🔇 Ignoring voice input - recognition paused or speaking');
+        return;
+      }
+
+      if (finalTranscript && finalTranscript.trim().length > 0) {
+        console.log('🎤 Processing final transcript:', finalTranscript);
+        this.processVoiceInput(finalTranscript);
+      } else if (interimTranscript && !this.isSpeaking) {
+        this.updateVoiceStatus(`Hearing: "${interimTranscript}"`);
+      }
+    };
+
+    this.voiceRecognition.onerror = (event) => {
+      console.log('❌ Voice recognition error:', event.error);
+      this.updateVoiceStatus(`Voice error: ${event.error}`);
+
+      // Clear the current recognition reference
+      this.voiceRecognition = null;
+
+      // Only restart on certain errors and within attempt limits
+      if (this.voiceConversationActive && !this.voiceRecognitionPaused && !this.isSpeaking) {
+        // Check if we've exceeded maximum restart attempts
+        if (this.voiceRestartAttempts >= this.maxVoiceRestartAttempts) {
+          console.log(`❌ Maximum voice restart attempts reached (${this.maxVoiceRestartAttempts}), stopping auto-restart`);
+          this.updateVoiceStatus('Voice recognition stopped - too many errors');
+          return;
+        }
+
+        // Add error-specific handling
+        const restartableErrors = ['no-speech', 'audio-capture', 'network'];
+        if (restartableErrors.includes(event.error)) {
+          this.voiceRestartAttempts++;
+
+          // Clear any existing restart timeout
+          if (this.voiceRestartTimeout) {
+            clearTimeout(this.voiceRestartTimeout);
+            this.voiceRestartTimeout = null;
+          }
+
+          // Implement exponential backoff for restart attempts
+          const restartDelay = Math.min(5000, this.voiceRestartAttempts * 1000 + 1000);
+
+          this.voiceRestartTimeout = setTimeout(() => {
+            this.voiceRestartTimeout = null;
+            if (this.voiceConversationActive && !this.voiceRecognitionPaused && !this.isSpeaking) {
+              console.log(`🔄 Restarting voice recognition after ${event.error} (attempt ${this.voiceRestartAttempts}/${this.maxVoiceRestartAttempts})`);
+              this.setupContinuousListening();
+            }
+          }, restartDelay);
+        } else {
+          console.log(`❌ Not restarting due to error: ${event.error}`);
+        }
+      }
+    };
+
+    this.voiceRecognition.onend = () => {
+      console.log('🎤 Voice recognition ended');
+
+      // Clear the recognition reference
+      this.voiceRecognition = null;
+
+      // Reset restart attempts on successful end (normal completion)
+      this.voiceRestartAttempts = 0;
+
+      // Clear any pending restart timeout
+      if (this.voiceRestartTimeout) {
+        clearTimeout(this.voiceRestartTimeout);
+        this.voiceRestartTimeout = null;
+      }
+
+      // Only restart if we're still active and not paused
+      if (this.voiceConversationActive && !this.voiceRecognitionPaused && !this.isSpeaking) {
+        // Check restart attempts limit before normal restart
+        if (this.voiceRestartAttempts >= this.maxVoiceRestartAttempts) {
+          console.log(`❌ Maximum voice restart attempts reached, not restarting automatically`);
+          this.updateVoiceStatus('Voice recognition paused - say "Hey Kana" to restart');
+          return;
+        }
+
+        // Use longer delay for normal restart to prevent rapid cycling
+        this.voiceRestartTimeout = setTimeout(() => {
+          this.voiceRestartTimeout = null;
+          if (this.voiceConversationActive && !this.voiceRecognitionPaused && !this.isSpeaking) {
+            console.log('🔄 Restarting voice recognition for continuous listening');
+            this.setupContinuousListening();
+          }
+        }, 1500); // Increased delay for stability
+      }
+    };
+
+    try {
+      console.log('🎤 Starting voice recognition');
+      this.voiceRecognition.start();
+    } catch (error) {
+      this.updateVoiceStatus('Failed to start voice recognition');
+      console.error('Voice recognition error:', error);
+      this.voiceRecognition = null;
+    }
+  }
+
+  stopContinuousListening() {
+    console.log('🛑 Stopping continuous listening');
+    if (this.voiceRecognition) {
+      try {
+        this.voiceRecognition.abort(); // Use abort for immediate stop
+      } catch (e) {
+        console.log('Voice recognition already stopped');
+      }
+      this.voiceRecognition = null;
+    }
+    this.voiceRecognitionPaused = false;
+    this.animateVoiceVisualizer(false);
+  }
+
+  // Pause voice recognition to prevent feedback during speech
+  pauseVoiceRecognition() {
+    console.log('🔇 Pausing voice recognition');
+    if (this.voiceRecognition && this.voiceConversationActive) {
+      try {
+        this.voiceRecognitionPaused = true;
+        this.voiceRecognition.abort(); // Use abort for immediate stop
+        this.voiceRecognition = null; // Clear reference
+        console.log('🔇 Voice recognition paused successfully');
+      } catch (error) {
+        console.log('❌ Error pausing voice recognition:', error);
+      }
+    } else {
+      this.voiceRecognitionPaused = true;
+    }
+  }
+
+  handleInterruptCommand() {
+    console.log('🛑 Handling interrupt command');
+
+    // Immediately stop any current speech
+    if (this.isSpeaking && this.speechSynthesis) {
+      this.speechSynthesis.cancel();
+      this.isSpeaking = false;
+      this.currentSpeech = null;
+      this.updateOrbState('idle');
+    }
+
+    // Resume voice recognition immediately
+    this.voiceRecognitionPaused = false;
+    this.updateVoiceStatus('Listening...');
+    this.animateVoiceVisualizer(true, 'listening');
+
+    // Acknowledge the interruption naturally
+    setTimeout(() => {
+      const acknowledgment = "Yes?";
+      this.addToVoiceConversation('kana', acknowledgment);
+      this.speakConversationalResponse(acknowledgment);
+    }, 300);
+  }
+
+  // Resume voice recognition after speech ends
+  resumeVoiceRecognition() {
+    console.log('🎤 Resuming voice recognition');
+    if (this.voiceConversationActive && this.voiceRecognitionPaused) {
+      try {
+        this.voiceRecognitionPaused = false;
+
+        // Check if recognition is already running
+        if (this.voiceRecognition && this.voiceRecognition.state === 'inactive') {
+          // Only restart if it's actually stopped
+          console.log('🎤 Voice recognition was inactive, restarting...');
+          this.setupContinuousListening();
+        } else if (!this.voiceRecognition) {
+          // Create new recognition if none exists
+          console.log('🎤 No voice recognition exists, creating new one...');
+          this.setupContinuousListening();
+        } else {
+          // Recognition is already active, just update status
+          console.log('🎤 Voice recognition already active, just updating status');
+          this.updateVoiceStatus('Listening...');
+          this.animateVoiceVisualizer(true, 'listening');
+        }
+        console.log('🎤 Voice recognition resumed successfully');
+      } catch (error) {
+        console.log('❌ Error resuming voice recognition:', error);
+        // If restart fails, setup fresh recognition after delay
+        setTimeout(() => {
+          if (this.voiceConversationActive && !this.isSpeaking && !this.voiceRecognitionPaused) {
+            console.log('🎤 Delayed restart of voice recognition');
+            this.setupContinuousListening();
+          }
+        }, 1000);
+      }
+    }
+  }
+
+  // Toggle conversational voice (listening/speaking in voice mode)
+  toggleConversationalVoice() {
+    console.log('🎤 Toggling conversational voice');
+    if (this.voiceConversationActive) {
+      this.stopVoiceConversation();
+      this.updateVoiceStatus('Conversational voice disabled');
+    } else {
+      this.startVoiceConversation();
+      this.updateVoiceStatus('Conversational voice enabled');
+    }
+    this.updateVoiceControlButtons();
+  }
+
+  // Toggle response reading voice (text-to-speech for responses)
+  toggleResponseReadingVoice() {
+    console.log('🔊 Toggling response reading voice');
+    this.voiceResponseEnabled = !this.voiceResponseEnabled;
+
+    // Save setting
+    chrome.storage.local.set({ kanaVoiceResponseEnabled: this.voiceResponseEnabled }).catch(e =>
+      console.log('Failed to save voice setting:', e)
+    );
+
+    // Stop any current speech if disabling
+    if (!this.voiceResponseEnabled && this.isSpeaking) {
+      this.stopSpeaking();
+    }
+
+    this.updateVoiceControlButtons();
+    this.log(`🔊 Response reading voice ${this.voiceResponseEnabled ? 'enabled' : 'disabled'}`);
+  }
+
+  // Pause current speech
+  pauseCurrentSpeech() {
+    console.log('⏸️ Pausing current speech');
+    if (this.isSpeaking && this.speechSynthesis) {
+      this.speechSynthesis.pause();
+      this.updateVoiceStatus('Speech paused');
+      this.showPauseButton(false);
+      this.showResumeButton(true);
+    }
+  }
+
+  // Resume paused speech
+  resumeCurrentSpeech() {
+    console.log('▶️ Resuming paused speech');
+    if (this.speechSynthesis && this.speechSynthesis.paused) {
+      this.speechSynthesis.resume();
+      this.updateVoiceStatus('Kana is speaking...');
+      this.showPauseButton(true);
+      this.showResumeButton(false);
+    }
+  }
+
+  // Update voice control button states
+  updateVoiceControlButtons() {
+    if (!this.voiceUI) return;
+
+    const conversationBtn = this.voiceUI.querySelector('.kana-voice-conversation-toggle');
+
+    if (conversationBtn) {
+      conversationBtn.classList.toggle('active', this.voiceConversationActive);
+      conversationBtn.title = this.voiceConversationActive ?
+        'Stop Voice Conversation' : 'Start Voice Conversation';
+    }
+  }
+
+  // Show/hide pause button
+  showPauseButton(show) {
+    if (!this.voiceUI) return;
+    const pauseBtn = this.voiceUI.querySelector('.kana-voice-pause');
+    if (pauseBtn) {
+      pauseBtn.style.display = show ? 'block' : 'none';
+    }
+  }
+
+  // Show/hide resume button (we'll convert pause button to resume when needed)
+  showResumeButton(show) {
+    if (!this.voiceUI) return;
+    const pauseBtn = this.voiceUI.querySelector('.kana-voice-pause');
+    if (pauseBtn && show) {
+      pauseBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5,3 19,12 5,21"/>
+        </svg>
+      `;
+      pauseBtn.title = 'Resume Speech';
+      pauseBtn.onclick = () => this.resumeCurrentSpeech();
+    } else if (pauseBtn) {
+      pauseBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="6" y="4" width="4" height="16"/>
+          <rect x="14" y="4" width="4" height="16"/>
+        </svg>
+      `;
+      pauseBtn.title = 'Pause Speech';
+      pauseBtn.onclick = () => this.pauseCurrentSpeech();
+    }
+  }
+
+  // Separate speech control methods for different speech types
+  pauseConversationalSpeech() {
+    console.log('⏸️ Pausing conversational speech');
+    if (this.isSpeaking && this.speechSynthesis && this.currentSpeechType === 'conversational') {
+      this.speechSynthesis.pause();
+      this.updateVoiceStatus('Conversation paused');
+      this.showConversationPauseButton(false);
+      this.showConversationResumeButton(true);
+    }
+  }
+
+  pauseReadingSpeech() {
+    console.log('⏸️ Pausing reading speech');
+    if (this.isSpeaking && this.speechSynthesis && this.currentSpeechType === 'reading') {
+      this.speechSynthesis.pause();
+      this.updateVoiceStatus('Reading paused');
+      this.showReadingPauseButton(false);
+      this.showReadingPlayButton(true);
+    }
+  }
+
+  resumeReadingSpeech() {
+    console.log('▶️ Resuming reading speech');
+    if (this.speechSynthesis && this.speechSynthesis.paused && this.currentSpeechType === 'reading') {
+      this.speechSynthesis.resume();
+      this.updateVoiceStatus('Reading text...');
+      this.showReadingPauseButton(true);
+      this.showReadingPlayButton(false);
+    }
+  }
+
+  // Show/hide conversation pause button
+  showConversationPauseButton(show) {
+    if (!this.voiceUI) return;
+    const pauseBtn = this.voiceUI.querySelector('.kana-voice-conversation-pause');
+    if (pauseBtn) {
+      pauseBtn.style.display = show ? 'flex' : 'none';
+    }
+  }
+
+  // Show/hide conversation resume button
+  showConversationResumeButton(show) {
+    // For conversation, we just hide the pause button when paused
+    this.showConversationPauseButton(!show);
+  }
+
+  // Show/hide reading pause button
+  showReadingPauseButton(show) {
+    if (!this.voiceUI) return;
+    const pauseBtn = this.voiceUI.querySelector('.kana-voice-reading-pause');
+    if (pauseBtn) {
+      pauseBtn.style.display = show ? 'flex' : 'none';
+    }
+  }
+
+  // Show/hide reading play button
+  showReadingPlayButton(show) {
+    if (!this.voiceUI) return;
+    const playBtn = this.voiceUI.querySelector('.kana-voice-reading-play');
+    if (playBtn) {
+      playBtn.style.display = show ? 'flex' : 'none';
+    }
+  }
+
+  processVoiceInput(input) {
+    this.ensureVoiceContextMemory();
+    console.log('🎤 processVoiceInput called with:', input);
+    if (!input || typeof input !== 'string' || input.trim().length === 0) {
+      console.log('❌ Invalid or empty input, returning');
+      return;
+    }
+
+    const cleanInput = input.trim();
+    console.log('🎤 Processing voice input:', cleanInput);
+    this.updateVoiceStatus('Analyzing screen...');
+    this.addToVoiceConversation('user', cleanInput);
+
+    // Use the EXACT same screen analysis as text system with voice-specific processing
+    console.log('🎤 Using EXACT same screen analysis as text system...');
+    this.isVoiceProcessing = true; // Flag to indicate this is voice processing
+    this.analyzeScreenContent(cleanInput);
+  }
+
+  async analyzeScreenContentForVoice(userQuestion) {
+    try {
+      console.log('🎤🔍 Starting EXACT same screen analysis as text system...');
+      this.updateVoiceStatus('Reading your screen...');
+
+      // Use the EXACT SAME methods as text system
+      const pageContent = this.extractPageContent();
+      console.log('🎤🔍 Page content extracted (same as text):', pageContent);
+
+      // Use the EXACT SAME prioritization as text system
+      const prioritizedContent = this.prioritizeVisibleContent(pageContent);
+      console.log('🎤🔍 Content prioritized (same as text)');
+
+      // Use the EXACT SAME relevance finding as text system
+      const relevantVisibleContent = this.findMostRelevantVisibleContent(userQuestion, prioritizedContent);
+      console.log('🎤🔍 Found relevant content (same as text)');
+
+      // Use the EXACT SAME platform identification as text system
+      const platform = this.identifyLMSPlatform();
+      console.log('🎤🔍 Platform identified (same as text):', platform);
+
+      // Use the EXACT SAME question parsing as text system
+      const questionContext = this.parseUserQuestionWithViewport(userQuestion, prioritizedContent, relevantVisibleContent);
+      console.log('🎤🔍 Question context parsed (same as text)');
+
+      this.updateVoiceStatus('Understanding your question...');
+
+      // Create the EXACT SAME context as text system
+      const context = {
+        platform: platform,
+        url: window.location.href,
+        userQuestion: userQuestion,
+        questionContext: questionContext,
+        pageContent: pageContent,
+        prioritizedContent: prioritizedContent,
+        relevantVisibleContent: relevantVisibleContent
+      };
+
+      // Process with AI for voice response (same context, voice-specific processing)
+      this.processWithAIForVoice(context);
+
+    } catch (error) {
+      console.error('🎤❌ Error in voice screen analysis:', error);
+      this.generateVoiceFallbackResponse("I'm having trouble analyzing your screen right now. Could you be more specific about what you need help with?", {});
+    }
+  }
+
+  async generateScreenAwareResponse(userInput) {
+    console.log('🖥️ generateScreenAwareResponse called with:', userInput);
+    try {
+      this.updateVoiceStatus('Analyzing your screen...');
+
+      // First, extract current screen content
+      const screenContent = await this.analyzeCurrentScreen();
+      console.log('🖥️ Screen content analyzed');
+
+      // Analyze user intent for response type
+      const responseIntent = this.analyzeUserIntent(userInput);
+      console.log('🤖 Detected intent:', responseIntent);
+
+      // Build conversation context from recent history
+      const recentContext = this.buildConversationContext();
+
+      // Create screen-aware contextual prompt
+      let screenAwarePrompt;
+
+      if (responseIntent.type === 'explanation') {
+        screenAwarePrompt = this.buildScreenAwareExplanationPrompt(userInput, screenContent, recentContext, responseIntent);
+      } else if (responseIntent.type === 'resources') {
+        screenAwarePrompt = this.buildScreenAwareResourcePrompt(userInput, screenContent, recentContext, responseIntent);
+      } else {
+        screenAwarePrompt = this.buildScreenAwareQuickPrompt(userInput, screenContent, recentContext);
+      }
+
+      console.log('🤖 Updating voice status to thinking...');
+      this.updateVoiceStatus('Thinking about your screen...');
+
+      console.log('🤖 Calling Gemini API with screen context...');
+      const response = await this.callConversationalAPI(screenAwarePrompt);
+      console.log('🤖 Gemini API response:', response ? response.substring(0, 100) + '...' : 'null');
+
+      if (response) {
+        console.log('🤖 Adding response to conversation and speaking...');
+        this.addToVoiceConversation('kana', response);
+
+        // Handle resource requests - use text format for displaying resources
+        if (responseIntent.type === 'resources') {
+          // Speak the normal voice response first
+          this.speakConversationalResponse(response);
+
+          // Also show resources in text format by calling analyzeScreenContent
+          setTimeout(async () => {
+            console.log('🔍 Showing resources in text format...');
+            this.updateVoiceStatus('Finding resources...');
+
+            // Extract topic for resource search
+            const searchTopic = this.extractTopicForResources(userInput);
+
+            // Use analyzeScreenContent to get text format resources
+            await this.analyzeScreenContent(`find resources about ${searchTopic}`);
+
+            // Voice confirmation that resources are available
+            setTimeout(() => {
+              const confirmMsg = "Check the chat panel for the resources I found!";
+              this.addToVoiceConversation('kana', confirmMsg);
+              this.speakConversationalResponse(confirmMsg);
+            }, 1000);
+          }, 1500);
+        } else {
+          this.speakConversationalResponse(response, responseIntent.type === 'explanation');
+        }
+      } else {
+        console.log('🤖 No response from API, using contextual fallback...');
+        const fallback = this.getScreenAwareFallback(userInput, screenContent);
+        this.addToVoiceConversation('kana', fallback);
+        this.speakConversationalResponse(fallback);
+      }
+    } catch (error) {
+      console.log('❌ Error in generateScreenAwareResponse:', error);
+      const errorResponse = "I'm having trouble analyzing your screen right now. Could you be more specific about what you need help with?";
+      this.addToVoiceConversation('kana', errorResponse);
+      this.speakConversationalResponse(errorResponse);
+    }
+  }
+
+  async analyzeCurrentScreen() {
+    console.log('🖥️ Starting screen analysis...');
+    try {
+      // Extract comprehensive page content
+      const pageContent = this.extractPageContent();
+
+      // Get additional context from forms, interactive elements
+      const interactiveElements = this.extractInteractiveElements();
+
+      // Get current URL and page type
+      const pageContext = {
+        url: window.location.href,
+        title: document.title,
+        domain: window.location.hostname,
+        isLMS: this.isLMSPage(),
+        pageType: this.detectPageType()
+      };
+
+      const screenAnalysis = {
+        content: pageContent,
+        interactive: interactiveElements,
+        context: pageContext,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('🖥️ Screen analysis complete:', {
+        contentLength: pageContent.text?.length || 0,
+        elementsFound: interactiveElements.length,
+        pageType: pageContext.pageType
+      });
+
+      return screenAnalysis;
+    } catch (error) {
+      console.error('🖥️ Error analyzing screen:', error);
+      return {
+        content: { text: 'Unable to analyze screen content', headings: [], links: [] },
+        interactive: [],
+        context: { url: window.location.href, title: document.title },
+        error: error.message
+      };
+    }
+  }
+
+  extractPageContent() {
+    const content = {
+      text: '',
+      headings: [],
+      links: [],
+      images: [],
+      tables: []
+    };
+
+    try {
+      // Get main text content, excluding navigation and ads
+      const textElements = document.querySelectorAll('p, div, span, article, section, main, .content, .post, .article');
+      const textContent = [];
+
+      textElements.forEach(el => {
+        if (el.offsetParent !== null && el.textContent.trim().length > 20) {
+          const text = el.textContent.trim();
+          if (!textContent.includes(text) && text.length > 20) {
+            textContent.push(text);
+          }
+        }
+      });
+
+      content.text = textContent.join(' ').substring(0, 3000); // Limit text length
+
+      // Extract headings
+      const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      headings.forEach(heading => {
+        if (heading.textContent.trim()) {
+          content.headings.push(heading.textContent.trim());
+        }
+      });
+
+      // Extract important links
+      const links = document.querySelectorAll('a[href]');
+      links.forEach(link => {
+        if (link.textContent.trim() && link.href) {
+          content.links.push({
+            text: link.textContent.trim(),
+            href: link.href
+          });
+        }
+      });
+
+      // Limit arrays to prevent overwhelming the AI
+      content.headings = content.headings.slice(0, 10);
+      content.links = content.links.slice(0, 10);
+
+    } catch (error) {
+      console.error('Error extracting page content:', error);
+      content.text = 'Error extracting page content';
+    }
+
+    return content;
+  }
+
+  isLMSPage() {
+    const url = window.location.href.toLowerCase();
+    const title = document.title.toLowerCase();
+
+    // Check for common LMS platforms
+    return url.includes('canvas') ||
+      url.includes('blackboard') ||
+      url.includes('moodle') ||
+      url.includes('schoology') ||
+      url.includes('brightspace') ||
+      url.includes('desire2learn') ||
+      title.includes('canvas') ||
+      title.includes('blackboard') ||
+      title.includes('moodle');
+  }
+
+  extractInteractiveElements() {
+    const elements = [];
+
+    // Find form inputs
+    const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], textarea, select');
+    inputs.forEach(input => {
+      const label = this.findInputLabel(input);
+      elements.push({
+        type: 'input',
+        tag: input.tagName.toLowerCase(),
+        inputType: input.type || 'text',
+        label: label,
+        placeholder: input.placeholder,
+        value: input.value ? '[has value]' : '[empty]'
+      });
+    });
+
+    // Find buttons
+    const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"]');
+    buttons.forEach(button => {
+      elements.push({
+        type: 'button',
+        text: button.textContent?.trim() || button.value || '[no text]',
+        disabled: button.disabled
+      });
+    });
+
+    // Find navigation elements
+    const navElements = document.querySelectorAll('nav a, .nav a, .navigation a, [role="navigation"] a');
+    navElements.forEach(nav => {
+      elements.push({
+        type: 'navigation',
+        text: nav.textContent?.trim(),
+        href: nav.href
+      });
+    });
+
+    return elements.slice(0, 20); // Limit to most relevant elements
+  }
+
+  findInputLabel(input) {
+    // Try to find associated label
+    if (input.labels && input.labels.length > 0) {
+      return input.labels[0].textContent?.trim();
+    }
+
+    // Try aria-label
+    if (input.getAttribute('aria-label')) {
+      return input.getAttribute('aria-label');
+    }
+
+    // Try placeholder
+    if (input.placeholder) {
+      return input.placeholder;
+    }
+
+    // Try nearby text
+    const parent = input.parentElement;
+    if (parent) {
+      const label = parent.querySelector('label');
+      if (label) return label.textContent?.trim();
+    }
+
+    return '[unlabeled]';
+  }
+
+  detectPageType() {
+    const url = window.location.href.toLowerCase();
+    const title = document.title.toLowerCase();
+
+    if (url.includes('canvas') || url.includes('blackboard') || url.includes('moodle')) {
+      return 'lms';
+    }
+    if (url.includes('github')) return 'github';
+    if (url.includes('stackoverflow') || url.includes('stackexchange')) return 'programming';
+    if (url.includes('youtube')) return 'video';
+    if (url.includes('google.com/search')) return 'search';
+    if (document.querySelector('form input[type="search"]')) return 'search';
+    if (document.querySelector('article, .article, .post')) return 'article';
+    if (document.querySelector('table, .table')) return 'data';
+
+    return 'general';
+  }
+
+  buildScreenAwareQuickPrompt(userInput, screenContent, recentContext) {
+    const context = screenContent.context;
+    const content = screenContent.content;
+    const interactive = screenContent.interactive;
+
+    // Convert text array to string if needed
+    const textContent = Array.isArray(content.text) ? content.text.join(' ') : (content.text || '');
+
+    return `You are Kana, a helpful AI learning assistant. The user is currently viewing a ${context.pageType} page: "${context.title}".
+
+CURRENT SCREEN CONTENT:
+${textContent ? textContent.substring(0, 1500) : 'No text content found'}
+
+KEY INTERACTIVE ELEMENTS:
+${interactive.map(el => `- ${el.type}: ${el.text || el.label || 'unlabeled'}`).join('\n').substring(0, 500)}
+
+USER QUESTION: "${userInput}"
+
+CONTEXT: ${recentContext}
+
+INSTRUCTIONS:
+1. Analyze what the user is looking at on their screen
+2. Provide direct, actionable guidance based on the screen content
+3. Don't ask "what do you want to know" - instead guide them based on what you can see
+4. Keep response under 150 words
+5. Be conversational and helpful
+6. Reference specific elements they can see on their screen
+
+Respond as if you can see their screen and guide them naturally:`;
+  }
+
+  buildScreenAwareExplanationPrompt(userInput, screenContent, recentContext, responseIntent) {
+    const context = screenContent.context;
+    const content = screenContent.content;
+
+    // Convert text array to string if needed
+    const textContent = Array.isArray(content.text) ? content.text.join(' ') : (content.text || '');
+    const headingsText = Array.isArray(content.headings) ? content.headings.join(', ') : '';
+
+    return `You are Kana, a helpful AI learning assistant. The user is viewing: "${context.title}" and needs a detailed explanation.
+
+CURRENT SCREEN ANALYSIS:
+Page Type: ${context.pageType}
+Content: ${textContent ? textContent.substring(0, 2000) : 'No content available'}
+Key Elements: ${headingsText}
+
+USER QUESTION: "${userInput}"
+CONTEXT: ${recentContext}
+
+INSTRUCTIONS:
+1. Provide a comprehensive explanation based on what's visible on their screen
+2. Break down complex concepts step by step
+3. Reference specific content they can see
+4. Guide them through the material systematically
+5. Keep response under 300 words but be thorough
+6. Use the screen content to provide concrete examples
+
+Explain in detail, referencing their current screen:`;
+  }
+
+  buildScreenAwareResourcePrompt(userInput, screenContent, recentContext, responseIntent) {
+    const context = screenContent.context;
+
+    return `You are Kana, a helpful AI learning assistant. The user is on: "${context.title}" and needs resources.
+
+CURRENT CONTEXT:
+- Page: ${context.pageType}
+- Domain: ${context.domain}
+- User needs: ${userInput}
+
+RECENT CONTEXT: ${recentContext}
+
+INSTRUCTIONS:
+1. Suggest resources that complement what they're currently viewing
+2. Provide specific, actionable next steps
+3. Reference their current screen context
+4. Suggest 2-3 relevant resources or actions
+5. Keep response under 200 words
+6. Be direct and helpful
+
+Suggest resources based on their current screen:`;
+  }
+
+  getScreenAwareFallback(userInput, screenContent) {
+    const context = screenContent.context;
+    return `I can see you're on ${context.title}. Based on your question "${userInput}", let me help guide you through what's on your screen. What specific part would you like me to explain?`;
+  }
+
+  async generateConversationalResponse(userInput) {
+    console.log('🤖 generateConversationalResponse called with:', userInput);
+    try {
+      // Build conversation context from recent history
+      const recentContext = this.buildConversationContext();
+
+      // Analyze user intent for response type
+      const responseIntent = this.analyzeUserIntent(userInput);
+      console.log('🤖 Detected intent:', responseIntent);
+
+      // Create contextual prompt based on intent
+      let conversationalPrompt;
+
+      if (responseIntent.type === 'explanation') {
+        conversationalPrompt = this.buildExplanationPrompt(userInput, recentContext, responseIntent);
+      } else if (responseIntent.type === 'resources') {
+        conversationalPrompt = this.buildResourcePrompt(userInput, recentContext, responseIntent);
+      } else {
+        conversationalPrompt = this.buildQuickPrompt(userInput, recentContext);
+      }
+
+      console.log('🤖 Updating voice status to thinking...');
+      this.updateVoiceStatus('Kana is thinking...');
+
+      console.log('🤖 Calling Gemini API...');
+      const response = await this.callConversationalAPI(conversationalPrompt);
+      console.log('🤖 Gemini API response:', response ? response.substring(0, 100) + '...' : 'null');
+
+      if (response) {
+        console.log('🤖 Adding response to conversation and speaking...');
+        this.addToVoiceConversation('kana', response);
+
+        // Handle resource requests - use text format for displaying resources
+        if (responseIntent.type === 'resources') {
+          // Speak the normal voice response first
+          this.speakConversationalResponse(response);
+
+          // Also show resources in text format by calling analyzeScreenContent
+          setTimeout(async () => {
+            console.log('🔍 Showing resources in text format...');
+            this.updateVoiceStatus('Finding resources...');
+
+            // Extract topic for resource search
+            const searchTopic = this.extractTopicForResources(userInput);
+
+            // Use analyzeScreenContent to get text format resources
+            await this.analyzeScreenContent(`find resources about ${searchTopic}`);
+
+            // Voice confirmation that resources are available
+            setTimeout(() => {
+              const confirmMsg = "Check the chat panel for the resources I found!";
+              this.addToVoiceConversation('kana', confirmMsg);
+              this.speakConversationalResponse(confirmMsg);
+            }, 1000);
+          }, 1500);
+        } else {
+          this.speakConversationalResponse(response, responseIntent.type === 'explanation');
+        }
+      } else {
+        console.log('🤖 No response from API, using contextual fallback...');
+        const fallback = this.getContextualFallback(userInput);
+        this.addToVoiceConversation('kana', fallback);
+        this.speakConversationalResponse(fallback);
+      }
+    } catch (error) {
+      console.log('❌ Error in generateConversationalResponse:', error);
+      const errorResponse = "Sorry, could you repeat that?";
+      this.addToVoiceConversation('kana', errorResponse);
+      this.speakConversationalResponse(errorResponse);
+    }
+  }  // Simple API call for conversational responses
+  async callConversationalAPI(prompt) {
+    try {
+      // Get API key from storage, fallback to default
+      let GEMINI_API_KEY = "AIzaSyBkyfIR24sNjKIoPQAgHmgNONCu38CqvHQ";
+      try {
+        const result = await chrome.storage.local.get(['geminiApiKey']);
+        if (result.geminiApiKey) {
+          GEMINI_API_KEY = result.geminiApiKey;
+        }
+      } catch (error) {
+        console.log('Using default API key for conversational response');
+      }
+
+      // Use the most reliable model for conversations
+      const model = this.lastSuccessfulModel || "gemini-2.0-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+
+      // Determine response length based on prompt content
+      let maxTokens = 150; // Default for quick responses
+      if (prompt.includes('detailed explanation') || prompt.includes('explain') || prompt.includes('thorough')) {
+        maxTokens = 300; // Longer for explanations
+      } else if (prompt.includes('resource')) {
+        maxTokens = 100; // Shorter for resource responses
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.8, // Slightly less creative for more focused responses
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: maxTokens, // Dynamic based on response type
+            candidateCount: 1
+          },
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_ONLY_HIGH"
+            },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_ONLY_HIGH"
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_ONLY_HIGH"
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_ONLY_HIGH"
+            }
+          ]
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+
+        // Extract text from response
+        if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts[0]) {
+          return result.candidates[0].content.parts[0].text;
+        }
+      } else {
+        console.log(`API call failed with status: ${response.status}`);
+        return null;
+      }
+    } catch (error) {
+      console.log(`Conversational API error: ${error.message}`);
+      return null;
+    }
+  }
+
+  analyzeUserIntent(userInput) {
+    const input = userInput.toLowerCase();
+
+    // Check for explanation requests
+    if (input.includes('explain') || input.includes('tell me more') || input.includes('how does') ||
+      input.includes('why does') || input.includes('what is') || input.includes('what are') ||
+      input.includes('break it down') || input.includes('in detail') || input.includes('elaborate')) {
+      return {
+        type: 'explanation',
+        keywords: this.extractKeywords(userInput)
+      };
+    }
+
+    // Check for resource requests
+    if (input.includes('resource') || input.includes('video') || input.includes('article') ||
+      input.includes('tutorial') || input.includes('more help') || input.includes('learn more') ||
+      input.includes('show me') || input.includes('find') || input.includes('example')) {
+      return {
+        type: 'resources',
+        keywords: this.extractKeywords(userInput)
+      };
+    }
+
+    // Default to quick response
+    return {
+      type: 'quick',
+      keywords: this.extractKeywords(userInput)
+    };
+  }
+
+  extractKeywords(text) {
+    // Simple keyword extraction for topic identification
+    const commonWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'];
+    return text.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !commonWords.includes(word))
+      .slice(0, 5); // Top 5 keywords
+  }
+
+  buildQuickPrompt(userInput, recentContext) {
+    return `You are Kana, a friendly AI learning assistant having a natural voice conversation with a student. 
+
+Recent conversation:
+${recentContext}
+
+The student just said: "${userInput}"
+
+Current page: ${document.title}
+
+Respond naturally and conversationally:
+- Keep it SHORT (1-2 sentences max for voice)
+- Sound human and casual (use contractions, natural speech)
+- Be helpful but don't lecture
+- If they're asking about something specific on the page, reference it
+- If it's a follow-up question, acknowledge the context
+- If they seem confused, offer to clarify
+- Use encouraging, supportive tone
+
+Respond as if you're a helpful friend sitting next to them:`;
+  }
+
+  buildExplanationPrompt(userInput, recentContext, intent) {
+    return `You are Kana, a friendly AI learning assistant having a natural voice conversation with a student who wants a detailed explanation.
+
+Recent conversation:
+${recentContext}
+
+The student asked for an explanation: "${userInput}"
+
+Current page: ${document.title}
+Keywords to focus on: ${intent.keywords.join(', ')}
+
+Provide a detailed explanation that:
+- Is thorough but conversational (3-5 sentences for voice)
+- Breaks down complex concepts into understandable parts
+- Uses examples and analogies when helpful
+- Maintains an encouraging, supportive tone
+- Speaks naturally (use contractions, casual language)
+- References the current page content when relevant
+
+Remember, this is a voice conversation, so speak directly to them as if you're explaining to a friend:`;
+  }
+
+  buildResourcePrompt(userInput, recentContext, intent) {
+    return `You are Kana, a friendly AI learning assistant. The student is asking for learning resources.
+
+Recent conversation:
+${recentContext}
+
+The student asked: "${userInput}"
+
+Current page: ${document.title}
+Keywords to focus on: ${intent.keywords.join(', ')}
+
+Respond conversationally by:
+- Acknowledging their request for resources (1-2 sentences)
+- Mentioning that you're finding relevant videos and articles
+- Being encouraging about their learning journey
+- Speaking naturally as if you're helping a friend
+
+Keep it brief since you'll be providing actual resources after this response:`;
+  }
+
+  buildConversationContext() {
+    if (!this.voiceConversationHistory || this.voiceConversationHistory.length === 0) {
+      return "This is the start of our conversation.";
+    }
+
+    // Get last 3 exchanges for context
+    const recent = this.voiceConversationHistory.slice(-6); // Last 3 back-and-forth exchanges
+    return recent.map(msg => `${msg.speaker === 'user' ? 'Student' : 'Kana'}: ${msg.message}`).join('\n');
+  }
+
+  async handleVoiceResourceRequest(userInput, kanaResponse) {
+    console.log('🎯 Handling voice resource request for:', userInput);
+
+    try {
+      // Speak the initial response first
+      this.speakConversationalResponse(kanaResponse);
+
+      // Wait for speech to complete, then find resources
+      setTimeout(async () => {
+        console.log('🔍 Finding resources...');
+        this.updateVoiceStatus('Finding resources...');
+
+        // Extract topic from user input for resource search
+        const searchTopic = this.extractTopicForResources(userInput);
+        console.log('🔍 Searching for resources about:', searchTopic);
+
+        // Find YouTube videos
+        let resourceResponse = "Here's what I found for you: ";
+        let hasResources = false;
+
+        if (this.liveYouTubeSearcher) {
+          try {
+            const videos = await this.liveYouTubeSearcher.searchVideos(searchTopic, 3);
+            if (videos && videos.length > 0) {
+              hasResources = true;
+              const videoTitles = videos.map(v => v.title).join(', ');
+              resourceResponse += `I found ${videos.length} helpful videos: ${videoTitles}. `;
+
+              // Add to voice conversation log
+              this.addToVoiceConversation('kana', `Found ${videos.length} videos: ${videoTitles}`);
+            }
+          } catch (error) {
+            console.log('❌ Error finding YouTube videos:', error);
+          }
+        }
+
+        // Find subject resources (articles, guides)
+        try {
+          const pageContent = this.extractPageContent();
+          const relevantResources = this.findRelevantSubjectResources(searchTopic, pageContent);
+
+          if (relevantResources && relevantResources.length > 0) {
+            hasResources = true;
+            const resourceTitles = relevantResources.slice(0, 2).map(r => r.title).join(', ');
+            resourceResponse += `Plus I have some great articles: ${resourceTitles}. `;
+
+            // Add to voice conversation log
+            this.addToVoiceConversation('kana', `Found articles: ${resourceTitles}`);
+          }
+        } catch (error) {
+          console.log('❌ Error finding subject resources:', error);
+        }
+
+        if (!hasResources) {
+          resourceResponse = "I'm still looking for the best resources for this topic. Try asking about something more specific if you'd like!";
+        } else {
+          resourceResponse += "Check the chat panel to see all the links!";
+
+          // Show the resources in the text chat panel for easy access
+          this.showResourcesInChatPanel(searchTopic, userInput);
+        }
+
+        // Speak the resource summary
+        setTimeout(() => {
+          this.addToVoiceConversation('kana', resourceResponse);
+          this.speakConversationalResponse(resourceResponse);
+        }, 1000);
+
+      }, 2000); // Wait 2 seconds after initial response
+
+    } catch (error) {
+      console.log('❌ Error handling voice resource request:', error);
+      const errorMsg = "I had trouble finding resources, but I'm here to help in other ways!";
+      this.addToVoiceConversation('kana', errorMsg);
+      this.speakConversationalResponse(errorMsg);
+    }
+  }
+
+  extractTopicForResources(userInput) {
+    // Extract the main topic from user input for resource searching
+    const input = userInput.toLowerCase();
+
+    // Remove common resource request words to get the core topic
+    const cleaned = input
+      .replace(/\b(resource|video|article|tutorial|more help|learn more|show me|find|example|resources|help with|about)\b/g, '')
+      .replace(/\b(explain|tell me|how|what|why|when|where)\b/g, '')
+      .trim();
+
+    // If we have page context, use it to enhance the topic
+    const pageTitle = document.title.toLowerCase();
+    const keywords = this.extractKeywords(cleaned || userInput);
+
+    // Combine page context with user keywords
+    if (keywords.length > 0) {
+      return keywords.join(' ');
+    } else if (pageTitle) {
+      return pageTitle.split(' ').slice(0, 3).join(' ');
+    } else {
+      return 'general learning';
+    }
+  }
+
+  async showResourcesInChatPanel(topic, originalInput) {
+    console.log('📋 Showing resources in chat panel for:', topic);
+
+    // Ensure chat panel is visible
+    if (!this.chatPanel.classList.contains('visible')) {
+      this.showChatPanel();
+    }
+
+    // Use existing resource finding logic from text version
+    try {
+      const pageContent = this.extractPageContent();
+      await this.analyzeScreenContent(`find resources about ${topic}`);
+    } catch (error) {
+      console.log('❌ Error showing resources in chat panel:', error);
+    }
+  }
+
+  getContextualFallback(userInput) {
+    const input = userInput.toLowerCase();
+
+    // Context-aware fallbacks based on what they might be asking
+    if (input.includes('help') || input.includes('explain')) {
+      return "Sure, I'd be happy to help! What specifically are you working on?";
+    } else if (input.includes('understand') || input.includes('confused')) {
+      return "No worries! Let's break it down. What part is tricky?";
+    } else if (input.includes('thank') || input.includes('thanks')) {
+      return "You're welcome! Anything else I can help with?";
+    } else if (input.includes('question') || input.includes('ask')) {
+      return "Go ahead, I'm listening!";
+    } else {
+      return "Could you tell me more about that?";
+    }
+  }
+
+  addToVoiceConversation(speaker, message) {
+    // Add to conversation history for context
+    if (!this.voiceConversationHistory) {
+      this.voiceConversationHistory = [];
+    }
+
+    this.voiceConversationHistory.push({
+      speaker: speaker,
+      message: message,
+      timestamp: Date.now()
+    });
+
+    // Keep only last 10 messages to prevent memory issues
+    if (this.voiceConversationHistory.length > 10) {
+      this.voiceConversationHistory = this.voiceConversationHistory.slice(-10);
+    }
+
+    if (!this.voiceUI) return;
+
+    const conversation = this.voiceUI.querySelector('.kana-voice-conversation');
+    if (!conversation) return;
+
+    const messageElement = document.createElement('div');
+    messageElement.className = `kana-voice-message kana-voice-message-${speaker}`;
+
+    messageElement.innerHTML = `
+      <div class="kana-voice-message-avatar">
+        ${speaker === 'user' ? '👤' : '🤖'}
+      </div>
+      <div class="kana-voice-message-content">
+        <div class="kana-voice-message-text">${message}</div>
+        <div class="kana-voice-message-time">${new Date().toLocaleTimeString()}</div>
+      </div>
+    `;
+
+    conversation.appendChild(messageElement);
+    conversation.scrollTop = conversation.scrollHeight;
+  }
+
+  async speakConversationalResponse(text, isExplanation = false) {
+    console.log('🔊 speakConversationalResponse called with:', text ? text.substring(0, 50) + '...' : 'null');
+    console.log('🔊 Is explanation:', isExplanation);
+    console.log('🔊 Voice response enabled:', this.voiceResponseEnabled);
+    console.log('🔊 Speech synthesis available:', !!this.speechSynthesis);
+
+    if (!this.voiceResponseEnabled || !this.speechSynthesis || !text) {
+      console.log('❌ Speech conditions not met - returning');
+      return;
+    }
+
+    try {
+      console.log('🔊 Stopping any current speech...');
+      // Stop any current speech
+      this.stopSpeaking();
+
+      // CRITICAL: Pause voice recognition while speaking to prevent feedback loop
+      console.log('🔊 Pausing voice recognition to prevent feedback...');
+      this.pauseVoiceRecognition();
+
+      console.log('🔊 Updating voice status and visualizer...');
+      this.updateVoiceStatus('Kana is speaking...');
+      this.animateVoiceVisualizer(true, 'speaking');
+
+      console.log('🔊 Cleaning text for speech...');
+      // Clean the text for better speech synthesis
+      const cleanedText = this.prepareTextForSpeech(text);
+
+      console.log('🔊 Creating speech utterance...');
+      // Create speech utterance
+      this.currentSpeech = new SpeechSynthesisUtterance(cleanedText);
+
+      // Configure for more natural, conversational speech
+      if (this.selectedVoice) {
+        console.log('🔊 Using selected voice:', this.selectedVoice.name);
+        this.currentSpeech.voice = this.selectedVoice;
+      } else {
+        console.log('⚠️ No selected voice available');
+      }
+
+      // Adjust speech settings based on response type
+      if (isExplanation) {
+        // Slightly slower for detailed explanations
+        this.currentSpeech.rate = 0.9;
+        this.currentSpeech.pitch = 1.0;
+        this.currentSpeech.volume = 0.9;
+        console.log('🔊 Using explanation speech settings (slower)');
+      } else {
+        // Normal speed for quick responses
+        this.currentSpeech.rate = 1.0;
+        this.currentSpeech.pitch = 1.0;
+        this.currentSpeech.volume = 0.9;
+        console.log('🔊 Using quick response speech settings');
+      }
+
+      // For explanations, enable continuous interrupt detection
+      if (isExplanation) {
+        this.enableInterruptDetectionDuringSpeech();
+      }
+
+      console.log('🔊 Setting up event handlers...');
+      // Set speech type for proper button handling
+      this.currentSpeechType = 'conversational';
+
+      // Set up event handlers
+      this.currentSpeech.onstart = () => {
+        console.log('🔊 Speech started!');
+        this.isSpeaking = true;
+        this.updateOrbState('speaking');
+        // Show conversation pause button during speech
+        this.showConversationPauseButton(true);
+        // Hide reading controls
+        this.showReadingPauseButton(false);
+        this.showReadingPlayButton(false);
+        // Keep voice recognition paused while speaking
+        this.pauseVoiceRecognition();
+      };
+
+      this.currentSpeech.onend = () => {
+        console.log('🔊 Speech ended - resuming voice recognition');
+        this.isSpeaking = false;
+        this.updateOrbState('idle');
+        this.currentSpeech = null;
+        this.currentSpeechType = null;
+        this.updateVoiceStatus('Listening...');
+        // Hide conversation pause button when speech ends
+        this.showConversationPauseButton(false);
+        this.animateVoiceVisualizer(true, 'listening');
+
+        // Disable interrupt detection
+        if (isExplanation) {
+          this.disableInterruptDetectionDuringSpeech();
+        }
+
+        // CRITICAL: Resume voice recognition after speech ends with a small delay
+        // to ensure the speaker audio has completely stopped
+        setTimeout(() => {
+          this.resumeVoiceRecognition();
+        }, 500); // 500ms delay to prevent picking up the tail end of speech
+      };
+
+      this.currentSpeech.onerror = (error) => {
+        console.log('❌ Speech error:', error);
+        this.isSpeaking = false;
+        this.updateOrbState('idle');
+        this.currentSpeech = null;
+        this.currentSpeechType = null;
+        this.updateVoiceStatus('Speech error occurred');
+        this.animateVoiceVisualizer(true, 'listening');
+
+        // Hide conversation pause button on error
+        this.showConversationPauseButton(false);
+
+        // Disable interrupt detection on error
+        if (isExplanation) {
+          this.disableInterruptDetectionDuringSpeech();
+        }
+
+        // Resume voice recognition even on error
+        setTimeout(() => {
+          this.resumeVoiceRecognition();
+        }, 300);
+      };
+
+      console.log('🔊 Starting speech synthesis...');
+      // Speak the response
+      this.speechSynthesis.speak(this.currentSpeech);
+      console.log('🔊 Speech synthesis.speak() called');
+
+    } catch (error) {
+      console.log(`❌ Conversational speech error: ${error.message}`);
+      this.log(`❌ Conversational speech error: ${error.message}`, 'error');
+      this.updateVoiceStatus('Speech error occurred');
+
+      // Resume voice recognition even on error
+      setTimeout(() => {
+        this.resumeVoiceRecognition();
+      }, 300);
+    }
+  }
+
+  enableInterruptDetectionDuringSpeech() {
+    console.log('🎯 Enabling interrupt detection during speech');
+    this.isListeningForInterrupts = true;
+
+    // Create a separate recognition instance for interrupt detection
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      this.interruptRecognition = new SpeechRecognition();
+
+      this.interruptRecognition.continuous = true;
+      this.interruptRecognition.interimResults = true;
+      this.interruptRecognition.lang = 'en-US';
+
+      this.interruptRecognition.onresult = (event) => {
+        if (!this.isListeningForInterrupts || !this.isSpeaking) return;
+
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+
+        // Check for stop commands
+        if (transcript.toLowerCase().includes('stop') ||
+          transcript.toLowerCase().includes('pause') ||
+          transcript.toLowerCase().includes('wait')) {
+          console.log('🛑 Interrupt detected during explanation:', transcript);
+          this.handleInterruptCommand();
+        }
+      };
+
+      this.interruptRecognition.onerror = (error) => {
+        console.log('⚠️ Interrupt recognition error:', error.error);
+      };
+
+      try {
+        this.interruptRecognition.start();
+        console.log('🎯 Interrupt detection started');
+      } catch (error) {
+        console.log('❌ Failed to start interrupt detection:', error);
+      }
+    }
+  }
+
+  disableInterruptDetectionDuringSpeech() {
+    console.log('🎯 Disabling interrupt detection');
+    this.isListeningForInterrupts = false;
+
+    if (this.interruptRecognition) {
+      try {
+        this.interruptRecognition.stop();
+        this.interruptRecognition = null;
+        console.log('🎯 Interrupt detection stopped');
+      } catch (error) {
+        console.log('⚠️ Error stopping interrupt detection:', error);
+      }
+    }
+  }
+
+  updateVoiceStatus(status) {
+    if (!this.voiceUI) return;
+
+    // Update compact mode status dot
+    const statusDot = this.voiceUI.querySelector('.kana-voice-status-dot');
+    if (statusDot) {
+      // Change dot color based on status
+      if (status.includes('Listening')) {
+        statusDot.style.background = '#ff4757'; // Red for listening
+        statusDot.style.animation = 'pulse 1s infinite';
+      } else if (status.includes('speaking') || status.includes('thinking')) {
+        statusDot.style.background = '#3742fa'; // Blue for speaking/thinking
+        statusDot.style.animation = 'pulse 0.8s infinite';
+      } else if (status.includes('error')) {
+        statusDot.style.background = '#ff6348'; // Orange for error
+        statusDot.style.animation = 'none';
+      } else {
+        statusDot.style.background = '#00ff88'; // Green for ready
+        statusDot.style.animation = 'pulse 2s infinite';
+      }
+    }
+
+    // Update expanded mode status text
+    const statusText = this.voiceUI.querySelector('.kana-voice-status-text');
+    if (statusText) {
+      statusText.textContent = status;
+    }
+
+    this.log(`🎤 Voice status: ${status}`);
+  }
+
+  animateVoiceVisualizer(active, mode = 'listening') {
+    if (!this.voiceUI) return;
+
+    // Handle compact mode
+    const compact = this.voiceUI.querySelector('.kana-voice-compact');
+    const compactAvatar = this.voiceUI.querySelector('.kana-voice-avatar-tiny');
+    const compactRings = this.voiceUI.querySelector('.kana-voice-rings-compact');
+    const compactAudioBars = this.voiceUI.querySelectorAll('.kana-voice-audio-bars-compact .audio-bar');
+
+    // Handle expanded mode
+    const expanded = this.voiceUI.querySelector('.kana-voice-avatar-expanded');
+    const expandedRings = this.voiceUI.querySelectorAll('.kana-voice-ring');
+    const expandedAudioBars = this.voiceUI.querySelectorAll('.kana-voice-audio-visualizer .audio-bar');
+
+    if (active) {
+      // Animate compact mode if visible
+      if (compact && !this.isExpanded) {
+        compact.classList.add('active');
+        if (compactAvatar) {
+          if (mode === 'speaking') {
+            compactAvatar.style.transform = 'scale(1.1)';
+            compactAvatar.style.boxShadow = '0 0 25px var(--orb-shadow, rgba(74, 144, 226, 0.6))';
+          } else {
+            compactAvatar.style.transform = 'scale(1.05)';
+            compactAvatar.style.boxShadow = '0 0 20px var(--orb-shadow, rgba(74, 144, 226, 0.4))';
+          }
+        }
+        // Animate compact audio bars
+        this.animateAudioBars(compactAudioBars, mode);
+      }
+
+      // Animate expanded mode if visible
+      if (expanded && this.isExpanded) {
+        const expandedContainer = this.voiceUI.querySelector('.kana-voice-expanded');
+        if (expandedContainer) {
+          expandedContainer.classList.add('active');
+        }
+        expanded.classList.add('active');
+        expandedRings.forEach(ring => {
+          if (ring) ring.classList.add('active');
+        });
+
+        if (mode === 'speaking') {
+          expanded.classList.add('speaking');
+          expandedRings.forEach(ring => {
+            if (ring) ring.classList.add('speaking');
+          });
+        }
+        // Animate expanded audio bars
+        this.animateAudioBars(expandedAudioBars, mode);
+      }
+    } else {
+      // Reset compact mode
+      if (compact) {
+        compact.classList.remove('active');
+        if (compactAvatar) {
+          compactAvatar.style.transform = 'scale(1)';
+          compactAvatar.style.boxShadow = '0 0 20px var(--orb-shadow, rgba(74, 144, 226, 0.4))';
+        }
+        this.stopAudioBars(compactAudioBars);
+      }
+
+      // Reset expanded mode
+      if (expanded) {
+        const expandedContainer = this.voiceUI.querySelector('.kana-voice-expanded');
+        if (expandedContainer) {
+          expandedContainer.classList.remove('active', 'speaking');
+        }
+        expanded.classList.remove('active', 'speaking');
+        expandedRings.forEach(ring => {
+          if (ring) ring.classList.remove('active', 'speaking');
+        });
+        this.stopAudioBars(expandedAudioBars);
+      }
+    }
+  }
+
+  animateAudioBars(audioBars, mode) {
+    if (!audioBars || audioBars.length === 0) return;
+
+    audioBars.forEach((bar, index) => {
+      if (!bar) return;
+
+      // Create dynamic animation based on mode
+      if (mode === 'speaking') {
+        bar.style.animationDuration = '0.6s';
+        bar.style.animationDelay = `${index * 0.08}s`;
+      } else {
+        bar.style.animationDuration = '1.2s';
+        bar.style.animationDelay = `${index * 0.1}s`;
+      }
+    });
+  }
+
+  stopAudioBars(audioBars) {
+    if (!audioBars || audioBars.length === 0) return;
+
+    audioBars.forEach(bar => {
+      if (bar) {
+        bar.style.animationDuration = '';
+        bar.style.animationDelay = '';
+      }
+    });
+  }
+
+  toggleVoiceConversationMute() {
+    // Implementation for muting/unmuting the microphone
+    if (this.voiceConversationActive) {
+      this.stopVoiceConversation();
+      this.updateVoiceStatus('Microphone muted');
+    } else {
+      this.startVoiceConversation();
+    }
+  }
+
+  showVoiceToggleFeedback() {
+    // Create feedback indicator
+    const feedback = document.createElement('div');
+    feedback.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, ${this.voiceResponseEnabled ? '#4CAF50' : '#ff5722'}, ${this.voiceResponseEnabled ? '#66BB6A' : '#ff7043'});
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      z-index: 2147483648;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8);
+      transition: all 0.3s ease;
+      text-align: center;
+    `;
+    feedback.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">${this.voiceResponseEnabled ? '🔊' : '🔇'}</span>
+        <span>Voice responses ${this.voiceResponseEnabled ? 'enabled' : 'disabled'}</span>
+      </div>
+    `;
+
+    document.body.appendChild(feedback);
+
+    // Animate in
+    setTimeout(() => {
+      feedback.style.opacity = '1';
+      feedback.style.transform = 'translate(-50%, -50%) scale(1)';
+    }, 10);
+
+    // Animate out and remove
+    setTimeout(() => {
+      feedback.style.opacity = '0';
+      feedback.style.transform = 'translate(-50%, -50%) scale(0.8)';
+      setTimeout(() => {
+        if (feedback.parentNode) {
+          feedback.parentNode.removeChild(feedback);
+        }
+      }, 300);
+    }, 2000);
+  }
+
+  async speakResponse(text) {
+    if (!this.voiceResponseEnabled || !this.speechSynthesis || !text) {
+      return;
+    }
+
+    try {
+      // Stop any current speech
+      this.stopSpeaking();
+
+      // Clean text for speech
+      const cleanText = this.prepareTextForSpeech(text);
+      if (!cleanText || cleanText.trim().length === 0) {
+        return;
+      }
+
+      // Create speech utterance
+      this.currentSpeech = new SpeechSynthesisUtterance(cleanText);
+
+      // Configure voice settings
+      this.configureSpeechVoice(this.currentSpeech);
+
+      // Set speech type for proper button handling
+      this.currentSpeechType = 'reading';
+
+      // Set up event handlers
+      this.currentSpeech.onstart = () => {
+        this.isSpeaking = true;
+        this.updateOrbState('speaking');
+        this.log('🔊 Started reading response');
+        // Show reading pause button during text reading
+        this.showReadingPauseButton(true);
+        this.showReadingPlayButton(false);
+        // Hide conversation controls
+        this.showConversationPauseButton(false);
+      };
+
+      this.currentSpeech.onend = () => {
+        this.isSpeaking = false;
+        this.updateOrbState('idle');
+        this.currentSpeech = null;
+        this.currentSpeechType = null;
+        this.log('🔊 Finished reading response');
+        // Hide reading controls when finished
+        this.showReadingPauseButton(false);
+        this.showReadingPlayButton(false);
+      };
+
+      this.currentSpeech.onerror = (error) => {
+        this.isSpeaking = false;
+        this.updateOrbState('idle');
+        this.currentSpeech = null;
+        this.currentSpeechType = null;
+        this.log(`❌ Speech error: ${error.error}`, 'error');
+        // Hide reading controls on error
+        this.showReadingPauseButton(false);
+        this.showReadingPlayButton(false);
+      };
+
+      // Speak the text
+      this.speechSynthesis.speak(this.currentSpeech);
+
+    } catch (error) {
+      this.log(`❌ Failed to speak response: ${error.message}`, 'error');
+      this.isSpeaking = false;
+      this.updateOrbState('idle');
+    }
+  }
+
+  stopSpeaking() {
+    if (this.speechSynthesis && this.isSpeaking) {
+      this.speechSynthesis.cancel();
+      this.isSpeaking = false;
+      this.currentSpeech = null;
+      this.currentSpeechType = null;
+      this.updateOrbState('idle');
+      this.log('🔊 Speech stopped');
+
+      // Hide all speech control buttons
+      this.showConversationPauseButton(false);
+      this.showReadingPauseButton(false);
+      this.showReadingPlayButton(false);
+    }
+  }
+
+  prepareTextForSpeech(html) {
+    try {
+      // Create a temporary element to parse HTML
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+
+      // Remove script and style elements
+      const scripts = temp.querySelectorAll('script, style');
+      scripts.forEach(el => el.remove());
+
+      // Replace common HTML elements with speech-friendly text
+      const headings = temp.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      headings.forEach(h => {
+        const level = h.tagName.toLowerCase();
+        h.textContent = `${h.textContent}. `;
+      });
+
+      // Add pauses after paragraphs and list items
+      const paragraphs = temp.querySelectorAll('p');
+      paragraphs.forEach(p => {
+        p.textContent = p.textContent + '. ';
+      });
+
+      const listItems = temp.querySelectorAll('li');
+      listItems.forEach((li, index) => {
+        li.textContent = `${li.textContent}. `;
+      });
+
+      // Get clean text
+      let text = temp.textContent || temp.innerText || '';
+
+      // CRITICAL: Remove asterisks and other formatting that causes speech issues
+      text = text
+        .replace(/\*+/g, '') // Remove all asterisks
+        .replace(/#+/g, '') // Remove hash symbols
+        .replace(/_{2,}/g, ' ') // Replace multiple underscores with space
+        .replace(/_([^_]+)_/g, '$1') // Remove single underscores (italic markdown)
+        .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold markdown
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert links to just text
+        .replace(/`([^`]+)`/g, '$1') // Remove code formatting
+        .replace(/\s+/g, ' ') // Multiple spaces to single space
+        .replace(/\n+/g, '. ') // Line breaks to periods
+        .replace(/\.+/g, '.') // Multiple periods to single
+        .replace(/\.\s*\./g, '.') // Remove duplicate periods
+        .replace(/([.!?])\s*([.!?])/g, '$1 ') // Clean up punctuation
+        .trim();
+
+      // Remove empty sentences
+      text = text.split('. ')
+        .filter(sentence => sentence.trim().length > 0)
+        .join('. ');
+
+      // Ensure it ends with proper punctuation
+      if (!text.match(/[.!?]$/)) {
+        text += '.';
+      }
+
+      // Limit length for speech (speech synthesis has limits)
+      const maxLength = 500;
+      if (text.length > maxLength) {
+        const sentences = text.split('. ');
+        let truncated = '';
+        for (const sentence of sentences) {
+          if ((truncated + sentence).length < maxLength - 20) {
+            truncated += sentence + '. ';
+          } else {
+            break;
+          }
+        }
+        text = truncated.trim();
+      }
+
+      console.log('🧹 Text cleaned for speech:', text.substring(0, 100) + '...');
+      return text;
+    } catch (error) {
+      this.log(`❌ Error preparing text for speech: ${error.message}`, 'error');
+      return '';
+    }
+  }
+
+  configureSpeechVoice(utterance) {
+    try {
+      // Use the pre-selected female voice if available
+      if (this.selectedVoice) {
+        utterance.voice = this.selectedVoice;
+        this.log(`🔊 Using selected voice: ${this.selectedVoice.name}`);
+      } else {
+        // Fallback to voice selection
+        const voices = this.speechSynthesis.getVoices();
+        const englishVoices = voices.filter(voice => voice.lang.startsWith('en-'));
+
+        if (englishVoices.length > 0) {
+          utterance.voice = englishVoices[0];
+        }
+      }
+
+      // Configure for natural speech
+      utterance.rate = 0.85; // Slower for clarity
+      utterance.pitch = 1.0; // Natural pitch
+      utterance.volume = 0.9; // High volume for clarity
+
+    } catch (error) {
+      this.log(`❌ Error configuring speech voice: ${error.message}`, 'error');
+      // Use default voice settings
+      utterance.rate = 0.85;
+      utterance.pitch = 1.0;
+      utterance.volume = 0.9;
+    }
   }
 
   async analyzeScreenContent(userQuestion) {
     try {
       // Get visible text content from the page
       const pageContent = this.extractPageContent();
-      
+
       // Prioritize content based on what's currently visible in viewport
       const prioritizedContent = this.prioritizeVisibleContent(pageContent);
-      
+
       // Find the most relevant visible content for the user's question
       const relevantVisibleContent = this.findMostRelevantVisibleContent(userQuestion, prioritizedContent);
-      
+
       // Identify the LMS platform
       const platform = this.identifyLMSPlatform();
-      
+
       // Parse the user's question with priority on visible content
       const questionContext = this.parseUserQuestionWithViewport(userQuestion, prioritizedContent, relevantVisibleContent);
-      
+
       // Generate an educational response (not an answer)
       const educationalResponse = this.generateEducationalResponse(questionContext, pageContent, platform);
-      
+
       // Show the response in the UI
       this.showResponse(educationalResponse);
-      
+
       // Store the question in conversation context
       this.conversationContext.addQuestion(userQuestion);
-      
+
       // Create context for AI processing with viewport priority
       const context = {
         platform: platform,
@@ -1457,10 +4290,19 @@ class KanaAssistant {
         prioritizedContent: prioritizedContent,
         relevantVisibleContent: relevantVisibleContent
       };
-      
-      // Process with AI
-      this.processWithAI(context);
-      
+
+      // Check if this is voice processing or text processing
+      if (this.isVoiceProcessing) {
+        console.log('🎤🔍 Voice processing detected - using voice AI processing');
+        this.isVoiceProcessing = false; // Reset flag
+        this.updateVoiceStatus('Thinking about your screen...');
+        this.processWithAIForVoice(context);
+      } else {
+        console.log('💬 Text processing - using regular AI processing');
+        // Process with AI
+        this.processWithAI(context);
+      }
+
     } catch (error) {
       console.error('Error analyzing screen content:', error);
       this.showError(`I encountered an error analyzing the page content: ${error.message}`);
@@ -1501,7 +4343,7 @@ class KanaAssistant {
         '[class*="question"]', '[class*="problem"]', '[class*="quiz"]',
         'li', 'p', 'div'
       ];
-      
+
       questionSelectors.forEach(selector => {
         const elements = document.querySelectorAll(selector);
         elements.forEach((el, index) => {
@@ -1529,7 +4371,7 @@ class KanaAssistant {
           }
         });
       });
-      
+
       // Look for code blocks
       const codeSelectors = ['code', 'pre', '.code', '.highlight', '.language-', '[class*="code"]'];
       codeSelectors.forEach(selector => {
@@ -1545,13 +4387,13 @@ class KanaAssistant {
           }
         });
       });
-      
+
       // Look for learning objectives or outcomes
       const objectivePatterns = [
         /(?:learning objectives?|outcomes?|goals?):?\s*(.*?)(?=\n\n|$)/gi,
         /(?:by the end|after completing|students? will):?\s*(.*?)(?=\n\n|$)/gi
       ];
-      
+
       const textElements = document.querySelectorAll('p, div, li, td');
       textElements.forEach(el => {
         const text = el.textContent.trim();
@@ -1562,14 +4404,14 @@ class KanaAssistant {
               content.learningObjectives.push(...matches.map(m => m.trim()));
             }
           });
-          
+
           // Collect general text content
           if (text.length > 20 && text.length < 500) {
             content.text.push(text);
           }
         }
       });
-      
+
       // Get important links
       const links = document.querySelectorAll('a[href]');
       links.forEach(link => {
@@ -1583,12 +4425,12 @@ class KanaAssistant {
           });
         }
       });
-      
+
       // Look for assignments/submissions
       const assignmentSelectors = [
         '[class*="assignment"]', '[class*="submission"]', '[class*="due"]'
       ];
-      
+
       assignmentSelectors.forEach(selector => {
         const assignmentElements = document.querySelectorAll(selector);
         assignmentElements.forEach(element => {
@@ -1616,21 +4458,21 @@ class KanaAssistant {
 
       // Extract ALL meaningful text content - simple and comprehensive approach
       console.log('🔍 Extracting all page content...');
-      
+
       // Get ALL text-containing elements
       const allElements = document.querySelectorAll('p, div, span, li, td, th, h1, h2, h3, h4, h5, h6, article, section, blockquote, cite, em, strong, b, i, code, pre');
-      
+
       // Simple content extraction - just get everything meaningful
       allElements.forEach(el => {
         const text = el.textContent.trim();
-        
+
         // Only skip if truly useless
-        if (text.length < 5 || 
-            text.match(/^[\s\d\.\-_\|]+$/) || // Just punctuation/numbers
-            text.toLowerCase().match(/^(home|menu|nav|login|logout|close|back|next|prev|continue|submit|ok|cancel)$/)) {
+        if (text.length < 5 ||
+          text.match(/^[\s\d\.\-_\|]+$/) || // Just punctuation/numbers
+          text.toLowerCase().match(/^(home|menu|nav|login|logout|close|back|next|prev|continue|submit|ok|cancel)$/)) {
           return;
         }
-        
+
         // Add to visible text array
         content.visibleText.push({
           text: text,
@@ -1661,7 +4503,7 @@ class KanaAssistant {
       console.log('- First 3 headings:', content.headings.slice(0, 3).map(h => h.text));
       console.log('- First 3 visible text items:', content.visibleText.slice(0, 3).map(item => `${item.text.substring(0, 100)}... (${item.element.tagName})`));
       console.log('- First 3 general text items:', content.text.slice(0, 3).map(text => text.substring(0, 100) + '...'));
-      
+
       // Additional debug for main content detection
       if (content.visibleText.length === 0) {
         console.log('⚠️ No visible text found - checking content extraction...');
@@ -1669,7 +4511,7 @@ class KanaAssistant {
         console.log('- Total elements checked:', visibleElements.length);
         console.log('- Sample page text:', document.body.textContent.substring(0, 200) + '...');
       }
-      
+
       return content;
     } catch (error) {
       console.error('Error extracting page content:', error);
@@ -1693,7 +4535,7 @@ class KanaAssistant {
       /(\d{1,2}\/\d{1,2}\/\d{2,4})/g,
       /(\w+\s+\d+,\s*\d+)/g
     ];
-    
+
     for (const pattern of datePatterns) {
       const match = text.match(pattern);
       if (match) return match[1] || match[0];
@@ -1703,7 +4545,7 @@ class KanaAssistant {
 
   identifyLMSPlatform() {
     const hostname = window.location.hostname.toLowerCase();
-    
+
     if (hostname.includes('canvas') || hostname.includes('instructure')) {
       return 'Canvas';
     } else if (hostname.includes('blackboard')) {
@@ -1734,17 +4576,17 @@ class KanaAssistant {
         textLength: element.textContent.trim().length,
         isVisible: this.isElementInViewport(element, 0.1)
       };
-      
+
       // Add specific context for common elements
       if (element.tagName.toLowerCase() === 'a') {
         context.href = element.getAttribute('href') || '';
       }
-      
+
       if (element.tagName.toLowerCase() === 'img') {
         context.alt = element.getAttribute('alt') || '';
         context.src = element.getAttribute('src') || '';
       }
-      
+
       return context;
     } catch (error) {
       console.warn('Error getting element context:', error);
@@ -1782,7 +4624,7 @@ class KanaAssistant {
         'shell': ['bash', 'sh', 'shell'],
         'yaml': ['yaml', 'yml']
       };
-      
+
       // Check class names for language patterns
       for (const [language, indicators] of Object.entries(languageIndicators)) {
         for (const indicator of indicators) {
@@ -1791,7 +4633,7 @@ class KanaAssistant {
           }
         }
       }
-      
+
       // Try to detect language from content patterns
       const code = element.textContent.trim();
       if (code.length > 0) {
@@ -1815,7 +4657,7 @@ class KanaAssistant {
           return 'java';
         }
       }
-      
+
       return 'unknown';
     } catch (error) {
       console.warn('Error detecting code language:', error);
@@ -1848,52 +4690,52 @@ class KanaAssistant {
         currentSection: null,
         visibleHeadings: []
       };
-      
+
       // Find currently visible headings and questions to determine current section
       const allHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
       const allQuestions = document.querySelectorAll('[class*="question"], [id*="question"], [class*="quiz"], .card-title');
-      
+
       let currentSectionHeading = null;
       let currentQuestionElement = null;
       let closestVisibleHeading = null;
       let minDistance = Infinity;
       let currentQuestionNumber = null;
-      
+
       // First, find the most prominent visible question/section
       allQuestions.forEach(questionEl => {
         const rect = questionEl.getBoundingClientRect();
         const isVisible = this.isElementInViewport(questionEl, 0.2);
-        
+
         if (isVisible) {
           const distance = Math.abs(rect.top - (window.innerHeight * 0.3)); // Target upper-middle of screen
           if (distance < minDistance) {
             minDistance = distance;
             currentQuestionElement = questionEl;
-            
+
             // Try to extract question number from text with multiple patterns
             const text = questionEl.textContent.trim();
-            const numberMatch = text.match(/(?:question|problem|quiz)\s*#?(\d+)/i) || 
-                               text.match(/^(\d+)[\.\)]\s/) || 
-                               text.match(/(\d+)\s*[\.\)]/) ||
-                               text.match(/^(\d+)\.\s+/); // Match "3. Let the right one in" format
+            const numberMatch = text.match(/(?:question|problem|quiz)\s*#?(\d+)/i) ||
+              text.match(/^(\d+)[\.\)]\s/) ||
+              text.match(/(\d+)\s*[\.\)]/) ||
+              text.match(/^(\d+)\.\s+/); // Match "3. Let the right one in" format
             if (numberMatch) {
               currentQuestionNumber = parseInt(numberMatch[1]);
             }
           }
         }
       });
-      
+
       // Also check for numbered sections/headings that might be questions
       const numberedElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, div, p, span');
       numberedElements.forEach(el => {
         const rect = el.getBoundingClientRect();
         const isVisible = this.isElementInViewport(el, 0.3);
-        
+
         if (isVisible) {
           const text = el.textContent.trim();
           // Look specifically for patterns like "3. Let the right one in"
           const questionPattern = text.match(/^(\d+)\.\s+(.+)/) || text.match(/^(\d+)[\)\-]\s+(.+)/);
-          
+
           if (questionPattern && questionPattern[2] && questionPattern[2].length > 5) {
             const distance = Math.abs(rect.top - (window.innerHeight * 0.3));
             if (distance < minDistance) {
@@ -1904,12 +4746,12 @@ class KanaAssistant {
           }
         }
       });
-      
+
       // Also check regular headings
       allHeadings.forEach(heading => {
         const rect = heading.getBoundingClientRect();
         const isVisible = this.isElementInViewport(heading);
-        
+
         if (isVisible) {
           prioritized.visibleHeadings.push({
             text: heading.textContent.trim(),
@@ -1917,7 +4759,7 @@ class KanaAssistant {
             position: rect.top
           });
         }
-        
+
         // Find the heading closest to the top of the viewport (but not too far up)
         if (rect.top >= -50 && rect.top <= window.innerHeight * 0.6) {
           const distance = Math.abs(rect.top - 100); // Target ~100px from top
@@ -1927,7 +4769,7 @@ class KanaAssistant {
           }
         }
       });
-      
+
       // Set current section based on the most relevant visible element
       if (currentQuestionElement) {
         const questionText = currentQuestionElement.textContent.trim();
@@ -1938,13 +4780,13 @@ class KanaAssistant {
           questionNumber: currentQuestionNumber,
           type: 'question'
         };
-        
+
         // Also get the full question content and any nearby content
         const questionContainer = currentQuestionElement.closest('.card, .question-container, .quiz-question, [class*="question"]') || currentQuestionElement.parentElement;
         if (questionContainer) {
           const fullQuestionText = questionContainer.textContent.trim();
           prioritized.currentSection.fullText = fullQuestionText.substring(0, 500) + (fullQuestionText.length > 500 ? '...' : '');
-          
+
           // Look for specific question content like lists, instructions, etc.
           const lists = questionContainer.querySelectorAll('ul, ol');
           const paragraphs = questionContainer.querySelectorAll('p');
@@ -1968,16 +4810,16 @@ class KanaAssistant {
           type: 'heading'
         };
       }
-      
+
       // Prioritize content based on actual viewport visibility
       const allElements = document.querySelectorAll('p, div, pre, code, blockquote, li, span');
-      
+
       allElements.forEach(element => {
         const isVisible = this.isElementInViewport(element, 0.3); // 30% visible threshold
         const text = element.textContent.trim();
-        
+
         if (text.length < 10) return; // Skip very short text
-        
+
         // Check if it's a question
         if (this.looksLikeQuestion(text)) {
           const questionObj = { text, element, context: { isVisible } };
@@ -1987,16 +4829,16 @@ class KanaAssistant {
             prioritized.mediumPriority.questions.push(questionObj);
           }
         }
-        
+
         // Check if it's a code block
-        if (element.tagName === 'PRE' || element.tagName === 'CODE' || 
-            element.className.includes('code') || element.className.includes('highlight')) {
+        if (element.tagName === 'PRE' || element.tagName === 'CODE' ||
+          element.className.includes('code') || element.className.includes('highlight')) {
           const codeObj = { text, element, language: this.detectCodeLanguage(element), context: { isVisible } };
           if (isVisible) {
             prioritized.highPriority.codeBlocks.push(codeObj);
           }
         }
-        
+
         // Add visible text content
         if (isVisible && text.length > 20) {
           prioritized.highPriority.text.push({
@@ -2012,7 +4854,7 @@ class KanaAssistant {
           });
         }
       });
-      
+
       // Find visible links
       const allLinks = document.querySelectorAll('a[href]');
       allLinks.forEach(link => {
@@ -2023,17 +4865,17 @@ class KanaAssistant {
           element: link,
           context: { isVisible }
         };
-        
+
         if (isVisible) {
           prioritized.mediumPriority.links.push(linkObj);
         }
       });
-      
+
       // Always include assignments as high priority
       if (pageContent.assignments) {
         prioritized.highPriority.assignments = pageContent.assignments;
       }
-      
+
       return prioritized;
     } catch (error) {
       console.warn('Error prioritizing visible content:', error);
@@ -2055,7 +4897,7 @@ class KanaAssistant {
       /\b(explain|describe|analyze|compare|evaluate|discuss|calculate|solve|find|determine|prove)\b/i,
       /^.*\?\s*$/i  // Any text ending with ?
     ];
-    
+
     return questionPatterns.some(pattern => pattern.test(text));
   }
 
@@ -2065,25 +4907,25 @@ class KanaAssistant {
       const rect = element.getBoundingClientRect();
       const windowHeight = window.innerHeight || document.documentElement.clientHeight;
       const windowWidth = window.innerWidth || document.documentElement.clientWidth;
-      
+
       // Check if element is completely outside viewport
       if (rect.bottom < 0 || rect.top > windowHeight || rect.right < 0 || rect.left > windowWidth) {
         return false;
       }
-      
+
       const visibleTop = Math.max(0, rect.top);
       const visibleBottom = Math.min(windowHeight, rect.bottom);
       const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-      
+
       const visibleLeft = Math.max(0, rect.left);
       const visibleRight = Math.min(windowWidth, rect.right);
       const visibleWidth = Math.max(0, visibleRight - visibleLeft);
-      
+
       const elementArea = rect.width * rect.height;
       const visibleArea = visibleWidth * visibleHeight;
-      
+
       if (elementArea === 0) return false;
-      
+
       const visibilityRatio = visibleArea / elementArea;
       return visibilityRatio >= threshold;
     } catch (error) {
@@ -2103,20 +4945,20 @@ class KanaAssistant {
         links: [],
         relevanceScore: 0
       };
-      
+
       // Convert user question to search terms for matching
       const searchTerms = userQuestion.toLowerCase()
         .replace(/[^\w\s]/g, ' ')
         .split(' ')
         .filter(term => term.length > 2 && !['what', 'how', 'why', 'when', 'where', 'this', 'that', 'the', 'and', 'for'].includes(term));
-      
+
       // Function to calculate relevance score for text content
       const calculateRelevanceScore = (text) => {
         if (!text || typeof text !== 'string') return 0;
-        
+
         const lowerText = text.toLowerCase();
         let score = 0;
-        
+
         searchTerms.forEach(term => {
           // Exact match gets higher score
           if (lowerText.includes(term)) {
@@ -2127,10 +4969,10 @@ class KanaAssistant {
             score += 1;
           }
         });
-        
+
         return score;
       };
-      
+
       // Analyze high priority content first
       if (prioritizedContent.highPriority) {
         // Check questions
@@ -2146,7 +4988,7 @@ class KanaAssistant {
             }
           });
         }
-        
+
         // Check code blocks
         if (prioritizedContent.highPriority.codeBlocks) {
           prioritizedContent.highPriority.codeBlocks.forEach(codeBlock => {
@@ -2160,7 +5002,7 @@ class KanaAssistant {
             }
           });
         }
-        
+
         // Check assignments
         if (prioritizedContent.highPriority.assignments) {
           prioritizedContent.highPriority.assignments.forEach(assignment => {
@@ -2174,7 +5016,7 @@ class KanaAssistant {
             }
           });
         }
-        
+
         // Check text content
         if (prioritizedContent.highPriority.text) {
           prioritizedContent.highPriority.text.forEach(text => {
@@ -2189,7 +5031,7 @@ class KanaAssistant {
           });
         }
       }
-      
+
       // Analyze medium priority content if high priority didn't yield enough results
       if (relevantContent.questions.length < 3 && prioritizedContent.mediumPriority) {
         if (prioritizedContent.mediumPriority.questions) {
@@ -2204,7 +5046,7 @@ class KanaAssistant {
             }
           });
         }
-        
+
         if (prioritizedContent.mediumPriority.links) {
           prioritizedContent.mediumPriority.links.forEach(link => {
             const score = calculateRelevanceScore(link.text);
@@ -2218,31 +5060,31 @@ class KanaAssistant {
           });
         }
       }
-      
+
       // Sort all content by relevance score
       relevantContent.questions.sort((a, b) => b.relevanceScore - a.relevanceScore);
       relevantContent.codeBlocks.sort((a, b) => b.relevanceScore - a.relevanceScore);
       relevantContent.assignments.sort((a, b) => b.relevanceScore - a.relevanceScore);
       relevantContent.text.sort((a, b) => b.relevanceScore - a.relevanceScore);
       relevantContent.links.sort((a, b) => b.relevanceScore - a.relevanceScore);
-      
+
       // Calculate overall relevance score
-      relevantContent.relevanceScore = 
+      relevantContent.relevanceScore =
         relevantContent.questions.reduce((sum, q) => sum + q.relevanceScore, 0) +
         relevantContent.codeBlocks.reduce((sum, c) => sum + c.relevanceScore, 0) +
         relevantContent.assignments.reduce((sum, a) => sum + a.relevanceScore, 0) +
         relevantContent.text.reduce((sum, t) => sum + t.relevanceScore, 0) +
         relevantContent.links.reduce((sum, l) => sum + l.relevanceScore, 0);
-      
+
       // Limit results to most relevant items
       relevantContent.questions = relevantContent.questions.slice(0, 5);
       relevantContent.codeBlocks = relevantContent.codeBlocks.slice(0, 3);
       relevantContent.assignments = relevantContent.assignments.slice(0, 2);
       relevantContent.text = relevantContent.text.slice(0, 8);
       relevantContent.links = relevantContent.links.slice(0, 3);
-      
+
       return relevantContent;
-      
+
     } catch (error) {
       console.warn('Error finding most relevant visible content:', error);
       return {
@@ -2262,38 +5104,38 @@ class KanaAssistant {
       assignments: [],
       concepts: []
     };
-    
+
     // Convert user question to search terms
     const searchTerms = userQuestion.toLowerCase()
       .replace(/[^\w\s]/g, ' ')
       .split(' ')
       .filter(term => term.length > 2);
-    
+
     // Search through page questions
     pageContent.questions.forEach(q => {
       const questionText = q.text.toLowerCase();
       let relevanceScore = 0;
-      
+
       // Exact phrase matching
       const questionPhrase = userQuestion.toLowerCase().replace(/[^\w\s]/g, ' ').trim();
       if (questionText.includes(questionPhrase)) {
         relevanceScore += 50;
       }
-      
+
       // Term matching
       searchTerms.forEach(term => {
         if (questionText.includes(term)) {
           relevanceScore += 10;
         }
       });
-      
+
       // Question number matching
       const userNumber = userQuestion.match(/(?:question|problem|#)\s*(\d+)/i);
       const questionNumber = questionText.match(/(?:question|problem|#)\s*(\d+)/i);
       if (userNumber && questionNumber && userNumber[1] === questionNumber[1]) {
         relevanceScore += 100; // Very high bonus for exact match
       }
-      
+
       // Simple number matching
       const userNumbers = userQuestion.match(/\d+/g);
       const questionNumbers = questionText.match(/\d+/g);
@@ -2304,7 +5146,7 @@ class KanaAssistant {
           }
         });
       }
-      
+
       if (relevanceScore > 0) {
         relevantContent.questions.push({
           ...q,
@@ -2329,7 +5171,7 @@ class KanaAssistant {
         visibleContent: relevantVisibleContent,
         isViewportSpecific: false
       };
-      
+
       // Detect intent
       if (question.includes('explain') || question.includes('what is') || question.includes('how does')) {
         context.intent = 'explain';
@@ -2338,8 +5180,8 @@ class KanaAssistant {
       }
 
       // Check if question is viewport-specific
-      if (question.includes('this question') || question.includes('current') || 
-          question.includes('here') || question.includes('on screen')) {
+      if (question.includes('this question') || question.includes('current') ||
+        question.includes('here') || question.includes('on screen')) {
         context.isViewportSpecific = true;
       }
 
@@ -2358,10 +5200,10 @@ class KanaAssistant {
       return context;
     } catch (error) {
       console.error("Error parsing user question with viewport:", error);
-      return { 
-        intent: 'learn', 
-        targetQuestion: null, 
-        subject: null, 
+      return {
+        intent: 'learn',
+        targetQuestion: null,
+        subject: null,
         relatedQuestions: [],
         currentSection: prioritizedContent.currentSection,
         isViewportSpecific: false
@@ -2369,9 +5211,141 @@ class KanaAssistant {
     }
   }
 
+  async processWithAIForVoice(context) {
+    const { questionContext, pageContent, platform, userQuestion } = context;
+
+    // Try to get API key from storage, fallback to default
+    let GEMINI_API_KEY = "AIzaSyBkyfIR24sNjKIoPQAgHmgNONCu38CqvHQ";
+    try {
+      const result = await chrome.storage.local.get(['geminiApiKey']);
+      if (result.geminiApiKey) {
+        GEMINI_API_KEY = result.geminiApiKey;
+        this.log('🎤 Using custom Gemini API key from storage');
+      }
+    } catch (error) {
+      this.log('🎤 Failed to get API key from storage, using default', 'warn');
+    }
+
+    // Smart model selection for voice responses
+    const PRIMARY_MODEL = "gemini-2.0-flash";
+    const FALLBACK_MODELS = [
+      "gemini-2.5-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro"
+    ];
+
+    let modelsToTest;
+    if (this.lastSuccessfulModel && this.lastSuccessfulModel !== PRIMARY_MODEL) {
+      modelsToTest = [this.lastSuccessfulModel, PRIMARY_MODEL, ...FALLBACK_MODELS.filter(m => m !== this.lastSuccessfulModel)];
+    } else {
+      modelsToTest = [PRIMARY_MODEL, ...FALLBACK_MODELS];
+    }
+
+    try {
+      this.updateVoiceStatus('Thinking about your screen...');
+
+      // Prepare a conversational voice prompt using the comprehensive screen analysis
+      const voicePrompt = this.prepareVoicePrompt(
+        userQuestion,
+        pageContent,
+        platform,
+        context.prioritizedContent,
+        context.relevantVisibleContent
+      );
+
+      console.log('🎤🤖 Voice prompt prepared, trying AI models...');
+
+      let response;
+      let errorMessage = "";
+      let modelUsed = null;
+
+      // Try models until one works
+      for (const model of modelsToTest.slice(0, 3)) {
+        try {
+          console.log(`🎤🤖 Trying voice model: ${model}`);
+
+          const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: voicePrompt
+                }]
+              }],
+              generationConfig: {
+                temperature: 0.7,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 500, // Shorter responses for voice
+                stopSequences: [],
+              }
+            })
+          });
+
+          if (apiResponse.ok) {
+            const data = await apiResponse.json();
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+              response = data.candidates[0].content.parts[0].text;
+              modelUsed = model;
+              this.lastSuccessfulModel = model; // Remember successful model
+              console.log(`🎤✅ Success with model: ${model}`);
+              break;
+            }
+          } else {
+            const errorData = await apiResponse.json();
+            errorMessage = `${model}: ${errorData.error?.message || 'Unknown error'}`;
+            console.warn(`🎤❌ Model ${model} failed:`, errorMessage);
+          }
+        } catch (error) {
+          errorMessage = `${model}: ${error.message}`;
+          console.warn(`🎤❌ Model ${model} error:`, error);
+        }
+      }
+
+      if (response) {
+        console.log('🎤✅ Voice AI response received:', response.substring(0, 100) + '...');
+
+        // Update conversation memory with this interaction
+        this.updateVoiceConversationMemory(userQuestion, response, pageContent);
+
+        // Add to voice conversation and speak the response
+        this.addToVoiceConversation('kana', response);
+        this.speakConversationalResponse(response);
+
+        this.updateVoiceStatus('Response complete');
+
+        this.log(`🎤✅ Voice AI processing successful with ${modelUsed}`);
+      } else {
+        console.log('🎤❌ All voice AI models failed');
+        const fallbackResponse = this.generateVoiceFallbackResponse(userQuestion, pageContent);
+
+        // Update conversation memory even for fallback responses
+        this.updateVoiceConversationMemory(userQuestion, fallbackResponse, pageContent);
+
+        this.addToVoiceConversation('kana', fallbackResponse);
+        this.speakConversationalResponse(fallbackResponse);
+        this.updateVoiceStatus('Using fallback response');
+      }
+
+    } catch (error) {
+      console.error('🎤❌ Voice AI processing error:', error);
+      const errorResponse = "I'm having some trouble processing your request right now. Could you try asking in a different way?";
+
+      // Update conversation memory even for error responses
+      this.updateVoiceConversationMemory(userQuestion, errorResponse, pageContent);
+
+      this.addToVoiceConversation('kana', errorResponse);
+      this.speakConversationalResponse(errorResponse);
+      this.updateVoiceStatus('Error - using fallback');
+    }
+  }
+
   async processWithAI(context) {
     const { questionContext, pageContent, platform, userQuestion } = context;
-    
+
     // Try to get API key from storage, fallback to default
     let GEMINI_API_KEY = "AIzaSyBkyfIR24sNjKIoPQAgHmgNONCu38CqvHQ";
     try {
@@ -2383,17 +5357,17 @@ class KanaAssistant {
     } catch (error) {
       this.log('Failed to get API key from storage, using default', 'warn');
     }
-    
+
     // Prioritize the best performing models first
     const PRIMARY_MODEL = "gemini-2.0-flash";
     const FALLBACK_MODELS = [
       "gemini-2.5-flash",
       "gemini-1.5-flash",
       "gemini-1.5-pro",
-      "gemini-1.5-flash-002", 
+      "gemini-1.5-flash-002",
       "gemini-1.5-pro-002"
     ];
-    
+
     // Smart model selection - try last successful model first
     let modelsToTest;
     if (this.lastSuccessfulModel && this.lastSuccessfulModel !== PRIMARY_MODEL) {
@@ -2402,44 +5376,44 @@ class KanaAssistant {
     } else {
       modelsToTest = [PRIMARY_MODEL, ...FALLBACK_MODELS];
     }
-    
+
     try {
       // Update orb state to show we're thinking
       this.updateOrbState('thinking');
       this.playAudioFeedback('thinking');
-      
+
       // Prepare the content to send to Gemini with viewport context
       const prompt = this.prepareGeminiPrompt(
-        userQuestion, 
-        pageContent, 
-        platform, 
-        context.prioritizedContent, 
+        userQuestion,
+        pageContent,
+        platform,
+        context.prioritizedContent,
         context.relevantVisibleContent
       );
-      
+
       // Try multiple models and endpoints
       let response;
       let errorMessage = "";
       let modelUsed = null;
-      
+
       // Skip model availability check - use smart model selection
       if (this.lastSuccessfulModel) {
         console.log(`Smart model selection: trying last successful model (${this.lastSuccessfulModel}) first`);
       }
       console.log("Models to test:", modelsToTest.slice(0, 3)); // Only log first 3 for cleaner output
-      
+
       // Limit to 3 models max for faster response (prioritizing the best ones)
       const limitedModels = modelsToTest.slice(0, 3);
-      
+
       // Try each model until one works
       for (const model of limitedModels) {
         try {
           console.log(`Trying model: ${model}`);
-          
+
           // Try v1 API first
           const v1Endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent`;
           const apiUrl = `${v1Endpoint}?key=${GEMINI_API_KEY}`;
-          
+
           response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -2478,7 +5452,7 @@ class KanaAssistant {
               ]
             })
           });
-          
+
           if (response.ok) {
             modelUsed = model;
             this.lastSuccessfulModel = model; // Remember this model for next time
@@ -2488,18 +5462,18 @@ class KanaAssistant {
             const errorData = await response.json().catch(() => ({}));
             console.log(`Model ${model} failed with status:`, response.status, errorData);
             errorMessage = errorData.error?.message || `Model ${model} returned status ${response.status}`;
-            
+
             // For rate limit errors, don't try v1beta (it will likely fail too)
             if (response.status === 429 || response.status === 503) {
               console.log(`Skipping v1beta for ${model} due to rate limit/service unavailable`);
               continue;
             }
-            
+
             // If v1 fails with other errors, try v1beta for this model
             try {
               const v1betaEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
               const betaApiUrl = `${v1betaEndpoint}?key=${GEMINI_API_KEY}`;
-              
+
               response = await fetch(betaApiUrl, {
                 method: 'POST',
                 headers: {
@@ -2538,7 +5512,7 @@ class KanaAssistant {
                   ]
                 })
               });
-              
+
               if (response.ok) {
                 modelUsed = model + " (v1beta)";
                 this.lastSuccessfulModel = model; // Remember the base model for next time
@@ -2554,20 +5528,20 @@ class KanaAssistant {
           errorMessage = modelError.message;
         }
       }
-      
+
       if (response && response.ok) {
         const result = await response.json();
         console.log("Full Gemini API response:", result);
-        
+
         // Handle different response structures with robust error checking
         let aiResponseText = null;
         let wasBlocked = false;
-        
+
         try {
           if (result.candidates && Array.isArray(result.candidates) && result.candidates.length > 0) {
             // Standard response structure
             const candidate = result.candidates[0];
-            
+
             // Check if response was blocked by safety filters
             if (candidate.finishReason === 'SAFETY') {
               console.warn('Response blocked by Gemini safety filters');
@@ -2585,7 +5559,7 @@ class KanaAssistant {
             // String response
             aiResponseText = result;
           }
-          
+
           // If no text found, check for blocking or other issues
           if (!aiResponseText && result.candidates && result.candidates[0]) {
             const candidate = result.candidates[0];
@@ -2608,7 +5582,7 @@ class KanaAssistant {
             }
           }
         }
-        
+
         // Provide better fallback responses based on what happened
         if (!aiResponseText) {
           if (wasBlocked) {
@@ -2639,21 +5613,21 @@ class KanaAssistant {
 <p><strong>Can you tell me more about what specific concept you'd like help understanding?</strong></p>`;
           }
         }
-        
+
         console.log("Received Gemini response:", aiResponseText.substring(0, 100) + "...");
-        
+
         // Parse the AI response to our format (now async to handle YouTube searches)
         const formattedResponse = await this.parseGeminiResponse(aiResponseText, questionContext);
-        
+
         // Update the UI with the real response
         this.showResponse(formattedResponse);
-        
+
         // Reset orb state back to idle
         this.updateOrbState('idle');
-        
+
         // Play audio feedback for response received
         this.playAudioFeedback('response');
-        
+
         return formattedResponse;
       } else {
         // If we got a response but it wasn't OK, try to get error details
@@ -2666,11 +5640,11 @@ class KanaAssistant {
             errorMessage = response.statusText || "Unknown API error";
           }
         }
-        
+
         // Fall back to demo response if API fails
         console.log("All Gemini models failed, using demo response instead");
         console.log("Last error message:", errorMessage);
-        
+
         // Check if it's a quota/billing issue
         if (errorMessage.includes('quota') || errorMessage.includes('billing') || errorMessage.includes('exceeded')) {
           // Show user-friendly message about API key limits
@@ -2712,7 +5686,7 @@ class KanaAssistant {
           this.updateOrbState('idle');
           return quotaResponse;
         }
-        
+
         const demoResponse = this.generateSafeDemoResponse(userQuestion, pageContent, platform, `All Gemini models failed: ${errorMessage}`);
         this.showResponse(demoResponse);
         this.updateOrbState('idle');
@@ -2720,7 +5694,7 @@ class KanaAssistant {
       }
     } catch (error) {
       console.error("AI processing error:", error);
-      
+
       // Use error handler if available
       if (this.errorHandler) {
         const errorStrategy = await this.errorHandler.handleError(error, {
@@ -2728,7 +5702,7 @@ class KanaAssistant {
           userQuestion,
           platform
         });
-        
+
         if (errorStrategy.shouldRetry && errorStrategy.retryCount < 3) {
           setTimeout(() => {
             this.processWithAI({
@@ -2739,7 +5713,7 @@ class KanaAssistant {
           return;
         }
       }
-      
+
       // Generate safe demo response
       const demoResponse = this.generateSafeDemoResponse(userQuestion, pageContent, platform, error.message);
       this.showResponse(demoResponse);
@@ -2747,13 +5721,13 @@ class KanaAssistant {
       return demoResponse;
     }
   }
-  
+
   generateSafeDemoResponse(userQuestion, pageContent, platform, errorMessage) {
     // Use modular demo response generator if available
     if (this.demoResponseGenerator) {
       return this.demoResponseGenerator.generateSafeResponse(userQuestion, pageContent, platform, errorMessage);
     }
-    
+
     // Fallback to basic safe response without potentially fake URLs
     return {
       type: 'learning_guidance',
@@ -2781,22 +5755,22 @@ class KanaAssistant {
       containsYouTubeUrls: false
     };
   }
-  
+
   generateDemoResponse(userQuestion, pageContent, platform, errorMessage) {
     // Generate a helpful response when API isn't working
     const subject = this.detectSubject(userQuestion, pageContent);
-    
+
     // Check if it's a rate limit error specifically
     const isRateLimitError = errorMessage && (
-      errorMessage.includes('quota') || 
-      errorMessage.includes('rate limit') || 
+      errorMessage.includes('quota') ||
+      errorMessage.includes('rate limit') ||
       errorMessage.includes('Too Many Requests') ||
       errorMessage.includes('Service Unavailable')
     );
-    
+
     // Generate subject-specific resources
     const subjectResources = this.getSubjectResources(subject, userQuestion);
-    
+
     return {
       type: 'learning_guidance',
       title: `Learning Support${subject ? ` for ${subject}` : ''}`,
@@ -2830,26 +5804,26 @@ class KanaAssistant {
           
           <p><strong>What specific part would you like help understanding better?</strong></p>
           
-          ${isRateLimitError ? 
-            '<p><em>Note: AI features are temporarily limited due to high usage.</em></p>' : 
-            '<p><em>Note: Working in offline mode - full AI features will return shortly.</em></p>'
-          }
+          ${isRateLimitError ?
+          '<p><em>Note: AI features are temporarily limited due to high usage.</em></p>' :
+          '<p><em>Note: Working in offline mode - full AI features will return shortly.</em></p>'
+        }
         </div>
       `,
       resources: subjectResources,
       encouragement: "Every expert was once a beginner. You're doing great by asking questions!"
     };
   }
-  
-// ...existing code...
-// ...existing code...
-  
+
+  // ...existing code...
+  // ...existing code...
+
   extractKeyTerms(pageContent, count = 3) {
     // Extract likely key terms from the page content
-    const allText = pageContent.title + ' ' + 
-                   pageContent.headings.map(h => h.text).join(' ') + ' ' +
-                   pageContent.text.join(' ');
-    
+    const allText = pageContent.title + ' ' +
+      pageContent.headings.map(h => h.text).join(' ') + ' ' +
+      pageContent.text.join(' ');
+
     const words = allText.toLowerCase()
       .replace(/[^\w\s]/g, '')
       .split(/\s+/)
@@ -2858,16 +5832,16 @@ class KanaAssistant {
         acc[word] = (acc[word] || 0) + 1;
         return acc;
       }, {});
-    
+
     // Sort by frequency
     const sortedWords = Object.entries(words)
       .sort((a, b) => b[1] - a[1])
       .map(entry => entry[0]);
-      
+
     // Filter out common words
     const commonWords = ['that', 'this', 'with', 'from', 'your', 'have', 'will', 'what', 'about', 'which', 'when', 'there'];
     const filteredWords = sortedWords.filter(word => !commonWords.includes(word));
-    
+
     // Capitalize first letter
     return filteredWords
       .slice(0, count)
@@ -2910,44 +5884,44 @@ class KanaAssistant {
       'c#': 'C# programming fundamentals',
       'web development': 'Full stack web development course',
       'react': 'React.js complete tutorial',
-      
+
       // Data Science
       'machine learning': 'Machine learning explained',
       'data science': 'Data science fundamentals',
       'neural networks': 'Neural networks explained',
       'algorithms': 'Algorithms and data structures',
-      
+
       // Game Development
       'unity': 'Unity game development tutorial',
       'game development': 'Game development fundamentals',
       'game design': 'Game design principles',
-      
+
       // Mobile
       'mobile development': 'Mobile app development tutorial',
       'ios development': 'iOS app development Swift',
       'android development': 'Android app development tutorial',
-      
+
       // DevOps
       'docker': 'Docker containerization tutorial',
       'kubernetes': 'Kubernetes explained',
       'aws': 'AWS cloud computing basics',
-      
+
       // Database
       'sql': 'SQL database tutorial',
       'database design': 'Database design fundamentals',
       'mongodb': 'MongoDB NoSQL tutorial',
-      
+
       // Cybersecurity
       'cybersecurity': 'Cybersecurity fundamentals',
       'encryption': 'Encryption and cryptography explained',
       'network security': 'Network security basics',
-      
+
       // UI/UX
       'ui design': 'UI design principles tutorial',
       'ux design': 'UX design fundamentals',
       'design thinking': 'Design thinking process'
     };
-    
+
     // Find the best match or use the topic directly
     for (const [key, video] of Object.entries(videoMappings)) {
       if (topic.toLowerCase().includes(key)) {
@@ -2965,7 +5939,7 @@ class KanaAssistant {
       'java': 'Check Oracle Java documentation',
       'c#': 'Refer to Microsoft C# documentation',
       'typescript': 'Check TypeScript handbook',
-      
+
       // Web Development
       'react': 'Check React official documentation',
       'vue': 'Refer to Vue.js official guide',
@@ -2973,38 +5947,38 @@ class KanaAssistant {
       'node': 'Refer to Node.js documentation',
       'html': 'Check MDN HTML reference',
       'css': 'Refer to MDN CSS documentation',
-      
+
       // Data Science
       'machine learning': 'Check scikit-learn documentation',
       'pandas': 'Refer to pandas official documentation',
       'numpy': 'Check NumPy documentation',
       'tensorflow': 'Refer to TensorFlow documentation',
-      
+
       // Game Development
       'unity': 'Check Unity official documentation and scripting API',
       'unreal': 'Refer to Unreal Engine documentation',
-      
+
       // Mobile Development
       'ios': 'Check Apple Developer documentation',
       'android': 'Refer to Android Developer guides',
       'flutter': 'Check Flutter documentation',
-      
+
       // Database
       'sql': 'Refer to W3Schools SQL tutorial or database vendor docs',
       'mongodb': 'Check MongoDB official documentation',
       'postgresql': 'Refer to PostgreSQL documentation',
-      
+
       // DevOps & Cloud
       'docker': 'Check Docker official documentation',
       'kubernetes': 'Refer to Kubernetes documentation',
       'aws': 'Check AWS documentation',
       'azure': 'Refer to Microsoft Azure documentation',
-      
+
       // General Programming
       'algorithms': 'Check algorithm visualization sites like VisuAlgo',
       'data structures': 'Refer to computer science textbooks and online courses'
     };
-    
+
     for (const [key, doc] of Object.entries(docMappings)) {
       if (topic.toLowerCase().includes(key)) {
         return doc;
@@ -3036,15 +6010,15 @@ class KanaAssistant {
     const questionLower = userQuestion.toLowerCase();
     const pageText = pageContent.text ? pageContent.text.join(' ').toLowerCase() : '';
     const pageTitle = pageContent.title ? pageContent.title.toLowerCase() : '';
-    
+
     // Check user question for technical terms
     const questionHasTech = technicalIndicators.some(term => questionLower.includes(term));
-    
+
     // Check page content for technical terms
-    const pageHasTech = technicalIndicators.some(term => 
+    const pageHasTech = technicalIndicators.some(term =>
       pageText.includes(term) || pageTitle.includes(term)
     );
-    
+
     // Check prioritized content if available
     let prioritizedHasTech = false;
     if (prioritizedContent) {
@@ -3054,7 +6028,7 @@ class KanaAssistant {
         ?.toLowerCase() || '';
       prioritizedHasTech = technicalIndicators.some(term => prioritizedText.includes(term));
     }
-    
+
     return questionHasTech || pageHasTech || prioritizedHasTech;
   }
 
@@ -3069,8 +6043,8 @@ class KanaAssistant {
       'DevOps': ['docker', 'kubernetes', 'aws', 'azure', 'deployment', 'ci/cd', 'cloud', 'server']
     };
 
-    const combinedText = (userQuestion + ' ' + 
-      (pageContent.title || '') + ' ' + 
+    const combinedText = (userQuestion + ' ' +
+      (pageContent.title || '') + ' ' +
       (pageContent.text ? pageContent.text.join(' ') : '')).toLowerCase();
 
     for (const [domain, keywords] of Object.entries(domains)) {
@@ -3081,7 +6055,7 @@ class KanaAssistant {
 
     return null;
   }
-  
+
   prepareGeminiPrompt(userQuestion, pageContent, platform, prioritizedContent = null, relevantVisibleContent = null) {
     // Create a simple, flexible prompt that trusts Gemini 2.5's understanding
     let prompt = `You are Kana, an intelligent AI learning assistant. You help students learn by providing guidance, hints, and asking thought-provoking questions rather than giving direct answers.
@@ -3099,12 +6073,12 @@ Your Role: Analyze the page content to understand what subject the student is st
 
 CONVERSATION CONTEXT:
 Previous Questions: ${this.conversationContext.previousQuestions.slice(-2).join(', ')}`;
-      
+
       if (this.conversationContext.currentTopic) {
         prompt += `
 Current Topic: ${this.conversationContext.currentTopic}`;
       }
-      
+
       if (this.conversationContext.lastResponse) {
         prompt += `
 Previous Response Summary: ${this.conversationContext.lastResponse.substring(0, 200)}...`;
@@ -3114,12 +6088,12 @@ Previous Response Summary: ${this.conversationContext.lastResponse.substring(0, 
     // Add current section information with enhanced detail
     if (prioritizedContent && prioritizedContent.currentSection) {
       const section = prioritizedContent.currentSection;
-      
+
       if (section.type === 'question' && section.questionNumber) {
         prompt += `
 Current Question: Question #${section.questionNumber}
 Question Text: "${section.text}"`;
-        
+
         if (section.fullText && section.fullText !== section.text) {
           prompt += `
 Full Question Content: "${section.fullText}"`;
@@ -3141,33 +6115,33 @@ Other Visible Sections: ${headings}`;
     if (relevantVisibleContent && relevantVisibleContent.questions.length > 0) {
       prompt += `
 Related Questions Visible:
-${relevantVisibleContent.questions.slice(0, 3).map((q, i) => 
-  `${i + 1}. ${q.text.substring(0, 150)}${q.text.length > 150 ? '...' : ''}`
-).join('\n')}`;
+${relevantVisibleContent.questions.slice(0, 3).map((q, i) =>
+        `${i + 1}. ${q.text.substring(0, 150)}${q.text.length > 150 ? '...' : ''}`
+      ).join('\n')}`;
     }
 
     // Add main page content for context - prioritize what matters
     if (pageContent.visibleText && pageContent.visibleText.length > 0) {
       console.log('🔍 Adding page content to prompt:', pageContent.visibleText.length, 'items');
-      
+
       // Get the most relevant content - prioritize by element type and content quality
       const prioritizedContent = pageContent.visibleText
         .sort((a, b) => {
           // Prioritize headings and structured content
-          const aScore = (a.tag.match(/h[1-6]/) ? 10 : 0) + 
-                        (a.tag === 'p' ? 5 : 0) + 
-                        (a.text.length > 50 ? 3 : 0) +
-                        (a.isVisible ? 2 : 0);
-          const bScore = (b.tag.match(/h[1-6]/) ? 10 : 0) + 
-                        (b.tag === 'p' ? 5 : 0) + 
-                        (b.text.length > 50 ? 3 : 0) +
-                        (b.isVisible ? 2 : 0);
+          const aScore = (a.tag.match(/h[1-6]/) ? 10 : 0) +
+            (a.tag === 'p' ? 5 : 0) +
+            (a.text.length > 50 ? 3 : 0) +
+            (a.isVisible ? 2 : 0);
+          const bScore = (b.tag.match(/h[1-6]/) ? 10 : 0) +
+            (b.tag === 'p' ? 5 : 0) +
+            (b.text.length > 50 ? 3 : 0) +
+            (b.isVisible ? 2 : 0);
           return bScore - aScore;
         })
         .slice(0, 15) // Take top 15 most relevant pieces
         .map(item => item.text.substring(0, 500)) // Generous length
         .join(' ... ');
-      
+
       if (prioritizedContent.length > 0) {
         prompt += `
 
@@ -3221,18 +6195,514 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
 
     return prompt;
   }
-  
+
+  prepareVoicePrompt(userQuestion, pageContent, platform, prioritizedContent = null, relevantVisibleContent = null) {
+    // Create a conversational voice prompt with memory and context awareness
+
+    // Ensure voice context memory is initialized
+    if (!this.voiceContextMemory) {
+      console.log('🎤⚠️ Voice context memory not found, initializing...');
+      this.voiceContextMemory = {
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        previousTopics: [],
+        screenReferences: [],
+        lastMentionedContent: null,
+        conversationStarted: false,
+        firstInteraction: true
+      };
+    }
+
+    // Check if this is a follow-up question or reference to previous content
+    const isFollowUpQuestion = this.isFollowUpQuestion(userQuestion);
+    const screenReferences = this.findScreenReferences(userQuestion, pageContent);
+
+    let prompt = `You are Kana, a conversational AI learning assistant. `;
+
+    // Add conversation context if this isn't the first interaction
+    if (!this.voiceContextMemory.firstInteraction) {
+      prompt += `You're having an ongoing conversation with a student. `;
+
+      // Add recent conversation context
+      if (this.voiceConversationHistory.length > 0) {
+        const recentContext = this.voiceConversationHistory
+          .slice(-4) // Last 4 messages
+          .filter(msg => msg && msg.speaker && msg.message) // Filter out invalid messages
+          .map(msg => `${msg.speaker}: ${String(msg.message || '').substring(0, 100)}`)
+          .join('\n');
+
+        if (recentContext.trim()) {
+          prompt += `
+
+RECENT CONVERSATION:
+${recentContext}
+`;
+        }
+      }
+
+      // Add remembered topics and references
+      if (this.voiceContextMemory.previousTopics.length > 0) {
+        prompt += `
+TOPICS WE'VE DISCUSSED: ${this.voiceContextMemory.previousTopics.join(', ')}
+`;
+      }
+
+      if (this.voiceContextMemory.screenReferences.length > 0) {
+        prompt += `
+SCREEN CONTENT WE'VE REFERENCED: ${this.voiceContextMemory.screenReferences.slice(-3).join(', ')}
+`;
+      }
+    }
+
+    prompt += `
+
+CURRENT SCREEN CONTEXT:
+Platform: ${platform}
+Page Title: "${pageContent.title || 'Learning content'}"
+URL: ${pageContent.url || ''}
+
+STUDENT'S QUESTION: "${userQuestion}"
+`;
+
+    // Add specific screen references if found
+    if (screenReferences.length > 0) {
+      prompt += `
+SPECIFIC CONTENT STUDENT IS REFERENCING:
+${screenReferences.join('\n')}
+`;
+    }
+
+    prompt += `
+WHAT I CAN SEE ON THEIR SCREEN:`;
+
+    // Use prioritized content if available (viewport-aware), otherwise fall back to regular content
+    if (prioritizedContent && typeof prioritizedContent === 'object' && prioritizedContent.highPriority) {
+      // Process the structured prioritized content from prioritizeVisibleContent method
+      const prioritizedText = [];
+
+      // Add high priority content first (what's currently in viewport)
+      if (prioritizedContent.highPriority.questions && prioritizedContent.highPriority.questions.length > 0) {
+        prioritizedText.push('CURRENT QUESTIONS/TASKS:');
+        prioritizedContent.highPriority.questions.forEach((q, i) => {
+          prioritizedText.push(`${i + 1}. ${q.text}`);
+        });
+      }
+
+      if (prioritizedContent.highPriority.headings && prioritizedContent.highPriority.headings.length > 0) {
+        prioritizedText.push('CURRENT SECTIONS:');
+        prioritizedContent.highPriority.headings.forEach(h => {
+          prioritizedText.push(`- ${h.text}`);
+        });
+      }
+
+      if (prioritizedContent.highPriority.text && prioritizedContent.highPriority.text.length > 0) {
+        prioritizedText.push('CURRENT VISIBLE CONTENT:');
+        prioritizedContent.highPriority.text.slice(0, 5).forEach(t => {
+          prioritizedText.push(`${t.text.substring(0, 200)}`);
+        });
+      }
+
+      // Add current section info if available
+      if (prioritizedContent.currentSection) {
+        prioritizedText.unshift(`CURRENT SECTION: "${prioritizedContent.currentSection.text}" (${prioritizedContent.currentSection.type})`);
+      }
+
+      const formattedContent = prioritizedText.join('\n');
+      prompt += `
+
+CURRENT VIEWPORT CONTENT (prioritized by user's scroll position):
+${formattedContent}`;
+      console.log('🎤🔍 Using structured prioritized content for voice:', formattedContent.substring(0, 200) + '...');
+    } else if (relevantVisibleContent && relevantVisibleContent.length > 0) {
+      // Use relevant visible content as secondary option
+      const relevantContent = relevantVisibleContent
+        .slice(0, 10)
+        .map(item => `${(item.tag || 'TEXT').toUpperCase()}: ${item.text.substring(0, 200)}`)
+        .join('\n');
+
+      prompt += `
+
+RELEVANT VISIBLE CONTENT:
+${relevantContent}`;
+      console.log('🎤🔍 Using relevant visible content for voice');
+    } else if (pageContent.visibleText && pageContent.visibleText.length > 0) {
+      // Fallback to all visible content - use SAME logic as text mode for consistency
+      const prioritizedContent = pageContent.visibleText
+        .sort((a, b) => {
+          // Prioritize headings and structured content (same as text mode)
+          const aScore = (a.tag.match(/h[1-6]/) ? 10 : 0) +
+            (a.tag === 'p' ? 5 : 0) +
+            (a.text.length > 50 ? 3 : 0) +
+            (a.isVisible ? 2 : 0);
+          const bScore = (b.tag.match(/h[1-6]/) ? 10 : 0) +
+            (b.tag === 'p' ? 5 : 0) +
+            (b.text.length > 50 ? 3 : 0) +
+            (b.isVisible ? 2 : 0);
+          return bScore - aScore;
+        })
+        .slice(0, 15) // Take top 15 most relevant pieces (same as text mode)
+        .map(item => item.text.substring(0, 500)) // Generous length (same as text mode)
+        .join(' ... ');
+
+      if (prioritizedContent.length > 0) {
+        prompt += `
+
+VISIBLE CONTENT ON SCREEN (same prioritization as text mode):
+${prioritizedContent}`;
+        console.log('🎤🔍 Using text-mode compatible prioritization for voice:', prioritizedContent.substring(0, 200) + '...');
+      }
+    }
+
+    // Add headings for structure
+    if (pageContent.headings && pageContent.headings.length > 0) {
+      const headings = pageContent.headings.slice(0, 8)
+        .filter(h => h && h.text)
+        .map(h => h.text)
+        .join('\n- ');
+
+      if (headings) {
+        prompt += `
+
+MAIN HEADINGS/SECTIONS:
+- ${headings}`;
+      }
+    }
+
+    // Add questions if this is a learning/quiz context
+    if (pageContent.questions && pageContent.questions.length > 0) {
+      const questions = pageContent.questions.slice(0, 5)
+        .filter(q => q && q.text)
+        .map((q, i) => `${i + 1}. ${q.text}`)
+        .join('\n');
+
+      if (questions) {
+        prompt += `
+
+QUESTIONS/EXERCISES VISIBLE:
+${questions}`;
+      }
+    }
+
+    // Add learning objectives or assignments
+    if (pageContent.learningObjectives && pageContent.learningObjectives.length > 0) {
+      const objectives = pageContent.learningObjectives.slice(0, 5).join('\n- ');
+      prompt += `
+
+LEARNING OBJECTIVES:
+- ${objectives}`;
+    }
+
+    if (pageContent.assignments && pageContent.assignments.length > 0) {
+      const assignments = pageContent.assignments.slice(0, 3).join('\n- ');
+      prompt += `
+
+ASSIGNMENTS/TASKS:
+- ${assignments}`;
+    }
+
+    // Add code blocks if present
+    if (pageContent.codeBlocks && pageContent.codeBlocks.length > 0) {
+      const codeInfo = pageContent.codeBlocks.slice(0, 3)
+        .filter(code => code && code.content)
+        .map(code =>
+          `${code.language || 'code'}: ${code.content.substring(0, 150)}...`
+        ).join('\n');
+
+      if (codeInfo) {
+        prompt += `
+
+CODE EXAMPLES:
+${codeInfo}`;
+      }
+    }
+
+    // Dynamic instructions based on context
+    prompt += `
+
+INSTRUCTIONS:
+`;
+
+    if (this.voiceContextMemory.firstInteraction) {
+      prompt += `1. This is your first interaction - briefly acknowledge what you see on their screen
+2. Reference specific content they're looking at to show you understand their context
+3. Be welcoming but focus on helping with their current screen content
+`;
+      // Mark that we've had our first interaction
+      this.voiceContextMemory.firstInteraction = false;
+    } else {
+      prompt += `1. Continue our conversation naturally - don't repeat screen introductions
+2. Reference our previous discussion if relevant to their current question
+3. Focus on their specific question about the content we can both see
+`;
+    }
+
+    prompt += `4. ${isFollowUpQuestion ? 'Build on our previous discussion and' : ''} Provide helpful, conversational guidance
+5. Reference specific sections, headings, or content by name when possible
+6. Keep response under 250 words and conversational for voice
+7. If they mention "this", "that", "here", try to identify what they're referring to from screen content
+8. Be encouraging and educational, building on what we've already covered
+
+Respond naturally as if you're looking at their screen with them:`;
+
+    return prompt;
+  }
+
+  // Voice conversation memory methods
+  isFollowUpQuestion(userQuestion) {
+    // Check if the question appears to be following up on a previous topic
+    const followUpIndicators = [
+      'what about', 'and', 'also', 'but', 'however', 'though', 'can you explain',
+      'what does', 'how about', 'tell me more', 'expand on', 'elaborate',
+      'this', 'that', 'it', 'they', 'these', 'those', 'here', 'there'
+    ];
+
+    const question = userQuestion.toLowerCase();
+    return followUpIndicators.some(indicator => question.includes(indicator));
+  }
+
+  findScreenReferences(userQuestion, pageContent) {
+    // Find specific content on screen that the user might be referencing
+    const references = [];
+    const question = userQuestion.toLowerCase();
+
+    // Check for direct text matches in headings
+    if (pageContent.headings) {
+      pageContent.headings.forEach(heading => {
+        if (heading.text && question.includes(heading.text.toLowerCase().substring(0, 20))) {
+          references.push(`HEADING: ${heading.text}`);
+        }
+      });
+    }
+
+    // Check for mentions of questions or exercises
+    if (pageContent.questions) {
+      pageContent.questions.forEach((q, index) => {
+        if (q.text && question.includes(q.text.toLowerCase().substring(0, 30))) {
+          references.push(`QUESTION ${index + 1}: ${q.text}`);
+        }
+      });
+    }
+
+    // Check for references to visible text content
+    if (pageContent.visibleText) {
+      pageContent.visibleText.slice(0, 10).forEach(item => {
+        if (item.text && item.text.length > 10) {
+          const contentWords = item.text.toLowerCase().split(' ').slice(0, 5);
+          if (contentWords.some(word => word.length > 3 && question.includes(word))) {
+            references.push(`CONTENT: ${item.text.substring(0, 100)}`);
+          }
+        }
+      });
+    }
+
+    return references.slice(0, 3); // Limit to 3 most relevant references
+  }
+
+  updateVoiceConversationMemory(userQuestion, aiResponse, pageContent) {
+    // Update conversation memory with new interaction
+
+    // Ensure voice context memory is initialized
+    if (!this.voiceContextMemory) {
+      console.log('🎤⚠️ Voice context memory not found in updateVoiceConversationMemory, initializing...');
+      this.voiceContextMemory = {
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        previousTopics: [],
+        screenReferences: [],
+        lastMentionedContent: null,
+        conversationStarted: false,
+        firstInteraction: true
+      };
+    }
+
+    // Add to conversation history
+    if (!this.voiceConversationHistory) {
+      this.voiceConversationHistory = [];
+    }
+
+    this.voiceConversationHistory.push({
+      role: 'user',
+      text: userQuestion,
+      timestamp: Date.now()
+    });
+
+    this.voiceConversationHistory.push({
+      role: 'assistant',
+      text: aiResponse,
+      timestamp: Date.now()
+    });
+
+    // Keep only last 10 messages to prevent memory bloat
+    if (this.voiceConversationHistory.length > 10) {
+      this.voiceConversationHistory = this.voiceConversationHistory.slice(-10);
+    }
+
+    // Extract and store topics mentioned
+    const topics = this.extractTopicsFromInteraction(userQuestion, aiResponse, pageContent);
+    topics.forEach(topic => {
+      if (!this.voiceContextMemory.previousTopics.includes(topic)) {
+        this.voiceContextMemory.previousTopics.push(topic);
+      }
+    });
+
+    // Keep only last 8 topics
+    if (this.voiceContextMemory.previousTopics.length > 8) {
+      this.voiceContextMemory.previousTopics = this.voiceContextMemory.previousTopics.slice(-8);
+    }
+
+    // Store screen references mentioned
+    const screenRefs = this.findScreenReferences(userQuestion, pageContent);
+    screenRefs.forEach(ref => {
+      if (!this.voiceContextMemory.screenReferences.includes(ref)) {
+        this.voiceContextMemory.screenReferences.push(ref);
+      }
+    });
+
+    // Keep only last 6 screen references
+    if (this.voiceContextMemory.screenReferences.length > 6) {
+      this.voiceContextMemory.screenReferences = this.voiceContextMemory.screenReferences.slice(-6);
+    }
+  }
+
+  extractTopicsFromInteraction(userQuestion, aiResponse, pageContent) {
+    // Extract key topics from the conversation
+    const topics = [];
+
+    // Get main topic from page title
+    if (pageContent.title) {
+      const title = pageContent.title.toLowerCase();
+      if (title.length > 5 && title.length < 50) {
+        topics.push(pageContent.title);
+      }
+    }
+
+    // Extract topics from headings mentioned
+    if (pageContent.headings) {
+      pageContent.headings.slice(0, 3).forEach(heading => {
+        if (heading.text && (
+          userQuestion.toLowerCase().includes(heading.text.toLowerCase().substring(0, 15)) ||
+          aiResponse.toLowerCase().includes(heading.text.toLowerCase().substring(0, 15))
+        )) {
+          topics.push(heading.text);
+        }
+      });
+    }
+
+    // Extract key terms from user question
+    const keyTerms = userQuestion.match(/\b[A-Z][a-z]{2,}\b/g) || [];
+    keyTerms.forEach(term => {
+      if (term.length > 3 && term.length < 20) {
+        topics.push(term);
+      }
+    });
+
+    return topics.slice(0, 3); // Limit to 3 most relevant topics
+  }
+
+  generateVoiceFallbackResponse(userQuestion, pageContent) {
+    // Generate a fallback response based on visible content when AI fails
+    const title = pageContent.title || 'this page';
+    const platform = this.identifyLMSPlatform();
+
+    if (pageContent.questions && pageContent.questions.length > 0) {
+      return `I can see you're working on ${title}. There are ${pageContent.questions.length} questions visible on your screen. Which specific question would you like help with?`;
+    }
+
+    if (pageContent.headings && pageContent.headings.length > 0) {
+      const mainTopic = pageContent.headings[0].text;
+      return `I can see you're studying ${mainTopic} on ${title}. What specific part of this topic would you like me to help explain?`;
+    }
+
+    if (pageContent.visibleText && pageContent.visibleText.length > 0) {
+      return `I can see you're on ${title}. Based on what's visible on your screen, what would you like me to help you understand better?`;
+    }
+
+    return `I can see you're on ${title}. Could you tell me what specific part you'd like help with?`;
+  }
+
+  addToVoiceConversation(speaker, message) {
+    // Add message to voice conversation history
+    if (!this.voiceConversationHistory) {
+      this.voiceConversationHistory = [];
+    }
+
+    // Validate inputs before adding
+    if (!speaker || (!message && message !== '')) {
+      console.warn('🎤⚠️ Invalid voice conversation entry - skipping:', { speaker, message });
+      return;
+    }
+
+    // Ensure message is a string
+    const messageStr = String(message || '');
+
+    this.voiceConversationHistory.push({
+      speaker: speaker,
+      message: messageStr,
+      timestamp: new Date().toISOString()
+    });
+
+    // Keep only last 10 messages to prevent memory issues
+    if (this.voiceConversationHistory.length > 10) {
+      this.voiceConversationHistory = this.voiceConversationHistory.slice(-10);
+    }
+
+    // Update voice UI if expanded to show conversation
+    this.updateVoiceConversationDisplay();
+  }
+
+  updateVoiceConversationDisplay() {
+    if (!this.voiceUI || !this.isExpanded) return;
+
+    const conversationContainer = this.voiceUI.querySelector('.kana-voice-conversation-mini');
+    if (!conversationContainer) return;
+
+    // Ensure voiceConversationHistory is initialized
+    if (!this.voiceConversationHistory) {
+      this.voiceConversationHistory = [];
+      return;
+    }
+
+    // Show last 3 messages in mini display
+    const recentMessages = this.voiceConversationHistory.slice(-3);
+    conversationContainer.innerHTML = recentMessages
+      .filter(msg => msg && msg.message && msg.speaker) // Filter out invalid messages
+      .map(msg => {
+        const message = String(msg.message || ''); // Ensure message is a string
+        const truncatedMessage = message.length > 100 ? message.substring(0, 100) + '...' : message;
+        return `<div class="voice-msg voice-msg-${msg.speaker}">
+          <div class="voice-msg-text">${truncatedMessage}</div>
+        </div>`;
+      }).join('');
+  }
+
+  buildConversationContext() {
+    // Build context from recent voice conversation
+    if (!this.voiceConversationHistory || this.voiceConversationHistory.length === 0) {
+      return 'This is the start of our conversation.';
+    }
+
+    const recentMessages = this.voiceConversationHistory.slice(-4);
+    const contextLines = recentMessages
+      .filter(msg => msg && msg.speaker && msg.message) // Filter out invalid messages
+      .map(msg => {
+        const message = String(msg.message || ''); // Ensure message is a string
+        return `${msg.speaker}: ${message.substring(0, 150)}`;
+      });
+
+    return `Recent conversation:\n${contextLines.join('\n')}`;
+  }
+
   // Helper method to extract text from unknown response structures
   extractTextFromResponse(responseObj) {
     try {
       // Recursive function to find text in nested objects
       const findText = (obj, maxDepth = 3) => {
         if (maxDepth <= 0) return null;
-        
+
         if (typeof obj === 'string') {
           return obj;
         }
-        
+
         if (typeof obj === 'object' && obj !== null) {
           // Check common text field names
           const textFields = ['text', 'content', 'message', 'response', 'answer', 'data'];
@@ -3241,7 +6711,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
               return obj[field];
             }
           }
-          
+
           // Check for arrays that might contain text
           if (Array.isArray(obj)) {
             for (const item of obj) {
@@ -3258,17 +6728,17 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
             }
           }
         }
-        
+
         return null;
       };
-      
+
       return findText(responseObj);
     } catch (error) {
       console.error("Error extracting text from response:", error);
       return null;
     }
   }
-  
+
   async parseGeminiResponse(aiResponseText, questionContext) {
     try {
       // Remove markdown code blocks if present
@@ -3278,12 +6748,12 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       } else if (cleanedResponse.startsWith('```')) {
         cleanedResponse = cleanedResponse.replace(/^```\s*/g, '').replace(/\s*```$/g, '');
       }
-      
-       // PROCESS YOUTUBE SEARCH REQUESTS
+
+      // PROCESS YOUTUBE SEARCH REQUESTS
       const youtubeSearchPattern = /\{\{YOUTUBE_SEARCH:([^}]+)\}\}/g;
       const searchRequests = [];
       let match;
-      
+
       // Find all YouTube search requests
       while ((match = youtubeSearchPattern.exec(cleanedResponse)) !== null) {
         searchRequests.push({
@@ -3291,39 +6761,39 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           searchTerm: match[1].trim()
         });
       }
-      
+
       // Process YouTube searches if found
       if (searchRequests.length > 0) {
         this.log(`Found ${searchRequests.length} YouTube search requests`);
-        
+
         for (const request of searchRequests) {
           try {
             // Use the Live YouTube Searcher to get real videos
             let videos = [];
-            
+
             if (this.liveYouTubeSearcher) {
               this.log(`Searching YouTube for: "${request.searchTerm}"`);
               videos = await this.liveYouTubeSearcher.searchEducationalVideos(request.searchTerm, 1);
             }
-            
+
             // Fallback to static database if no live results
             if (!videos || videos.length === 0) {
               this.log(`No live results, checking static database for: "${request.searchTerm}"`);
               videos = this.realYouTubeFinder ? this.realYouTubeFinder.findRealVideos(request.searchTerm, 1) : [];
             }
-            
+
             // Replace the search request with real video link
             if (videos && videos.length > 0) {
               const video = videos[0];
-              
+
               // Debug: Log the video object structure
               this.log(`Video object received:`, 'debug');
               console.log('Video object:', video);
-              
+
               // Normalize video ID - handle both 'id' and 'videoId' properties
               const videoId = video.id || video.videoId;
               const videoTitle = video.title;
-              
+
               // Validate video object has required properties and that videoId is not undefined
               if (video && videoId && videoId !== 'undefined' && videoTitle) {
                 const videoLink = `[${videoTitle}](https://www.youtube.com/watch?v=${videoId})`;
@@ -3332,10 +6802,10 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
               } else {
                 this.log(`❌ Invalid video object - missing id/videoId or title. Object:`, 'error');
                 console.error('Invalid video object:', video);
-                
+
                 // Fallback to search suggestion if video object is malformed
                 cleanedResponse = cleanedResponse.replace(
-                  request.fullMatch, 
+                  request.fullMatch,
                   `Search YouTube for "${request.searchTerm}" for visual tutorials`
                 );
                 this.log(`🔄 Used fallback search suggestion for: "${request.searchTerm}"`);
@@ -3343,7 +6813,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
             } else {
               // Replace with search suggestion if no videos found
               cleanedResponse = cleanedResponse.replace(
-                request.fullMatch, 
+                request.fullMatch,
                 `Search YouTube for "${request.searchTerm}" for visual tutorials`
               );
               this.log(`❌ No videos found for: "${request.searchTerm}"`);
@@ -3352,20 +6822,20 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
             this.log(`Error processing YouTube search for "${request.searchTerm}": ${error.message}`, 'error');
             // Replace with search suggestion on error
             cleanedResponse = cleanedResponse.replace(
-              request.fullMatch, 
+              request.fullMatch,
               `Search YouTube for "${request.searchTerm}" for tutorials`
             );
           }
         }
       }
-      
-      
+
+
       // CLEAN UP FAKE LINKS - Remove any invalid markdown links
       // Pattern to match [text](invalid-url) where invalid-url is not a real URL
       const fakeLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
       const foundLinks = [];
       let linkMatch;
-      
+
       // First, collect all links
       while ((linkMatch = fakeLinkPattern.exec(cleanedResponse)) !== null) {
         foundLinks.push({
@@ -3374,20 +6844,20 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           url: linkMatch[2]
         });
       }
-      
+
       // Then process each link
       foundLinks.forEach(link => {
         // Check if it's a valid URL - be very strict
-        const isValidUrl = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]\//.test(link.url) || 
-                          /^www\.[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]/.test(link.url);
-        
+        const isValidUrl = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]\//.test(link.url) ||
+          /^www\.[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]/.test(link.url);
+
         // Common fake URL patterns to catch
         const isFakeUrl = /^(fake|non-working|invalid|placeholder|example|test|dummy)-?(url|link)$/i.test(link.url) ||
-                         /^(url|link|href|src)$/i.test(link.url) ||
-                         link.url.includes('fake') ||
-                         link.url.includes('placeholder') ||
-                         link.url.length < 5;
-        
+          /^(url|link|href|src)$/i.test(link.url) ||
+          link.url.includes('fake') ||
+          link.url.includes('placeholder') ||
+          link.url.length < 5;
+
         // If it's not a valid URL or is clearly fake, convert to plain text suggestion
         if (!isValidUrl || isFakeUrl) {
           const replacement = `Search for "${link.text}" in documentation or tutorials`;
@@ -3395,7 +6865,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           this.log(`🧹 Cleaned up fake link: [${link.text}](${link.url})`);
         }
       });
-      
+
       // Check if the response is in JSON format (legacy support)
       if (cleanedResponse.startsWith('{')) {
         try {
@@ -3414,10 +6884,10 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           // Continue to markdown parsing approach
         }
       }
-      
+
       // For natural markdown/text responses, parse as pure content
       let processedContent = cleanedResponse;
-      
+
       // Convert Markdown to HTML if it's not already HTML
       if (!processedContent.includes('<') || processedContent.includes('**') || processedContent.includes('##')) {
         processedContent = this.convertMarkdownToHtml(processedContent);
@@ -3449,42 +6919,42 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
 
   convertMarkdownToHtml(markdown) {
     if (!markdown) return '';
-    
+
     let html = markdown;
-    
+
     // Convert headers (## Header -> <h3>Header</h3>, ### Header -> <h4>Header</h4>)
     html = html.replace(/^### (.*$)/gim, '<h4>$1</h4>');
     html = html.replace(/^## (.*$)/gim, '<h3>$1</h3>');
     html = html.replace(/^# (.*$)/gim, '<h2>$1</h2>');
-    
+
     // Convert bold text (**text** -> <strong>text</strong>)
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
+
     // Convert italic text (*text* -> <em>text</em>)
     html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    
+
     // Convert inline code (`code` -> <code>code</code>)
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
     // Convert links ([text](url) -> <a href="url">text</a>)
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-    
+
     // Convert unordered lists (- item or * item -> <ul><li>item</li></ul>)
     // Handle nested lists better
     const lines = html.split('\n');
     let inList = false;
     let listType = null;
     let processedLines = [];
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
-      
+
       // Check for unordered list item
       const unorderedMatch = trimmedLine.match(/^[-\*\+]\s+(.+)/);
       // Check for ordered list item  
       const orderedMatch = trimmedLine.match(/^\d+\.\s+(.+)/);
-      
+
       if (unorderedMatch) {
         if (!inList || listType !== 'ul') {
           if (inList) processedLines.push(`</${listType}>`);
@@ -3517,68 +6987,68 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         }
       }
     }
-    
+
     // Close any open list
     if (inList) {
       processedLines.push(`</${listType}>`);
     }
-    
+
     html = processedLines.join('\n');
-    
+
     // Convert line breaks to proper paragraphs
     const paragraphs = html.split(/\n\s*\n/);
     html = paragraphs.map(p => {
       p = p.trim();
       if (!p) return '';
-      
+
       // Don't wrap if it's already a block element
       if (p.match(/^<(h[1-6]|ul|ol|div|blockquote|li)/)) {
         return p;
       }
-      
+
       return `<p>${p.replace(/\n/g, '<br>')}</p>`;
     }).join('\n');
-    
+
     // Clean up any remaining newlines in non-paragraph content
     html = html.replace(/\n(?![<>])/g, '<br>');
-    
+
     return html;
   }
-  
+
   extractHintsFromResponse(response) {
     // Only extract hints if they're actually useful - no generic extractions
     const hintKeywords = ['try this', 'consider', 'think about', 'remember that', 'start by', 'tip:', 'suggestion:', 'approach this by'];
     const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 25);
-    
+
     const hints = sentences.filter(sentence => {
       const lower = sentence.toLowerCase().trim();
       return hintKeywords.some(keyword => lower.includes(keyword)) &&
-             !lower.includes('resource') &&
-             !lower.includes('link') &&
-             !lower.includes('http') &&
-             !lower.includes('additional') &&
-             lower.length > 30 &&
-             lower.length < 180;
+        !lower.includes('resource') &&
+        !lower.includes('link') &&
+        !lower.includes('http') &&
+        !lower.includes('additional') &&
+        lower.length > 30 &&
+        lower.length < 180;
     }).slice(0, 2);
-    
+
     // Only return meaningful, contextual hints
     return hints.length > 0 && hints[0].length > 30 ? hints : [];
   }
-  
+
   extractConceptsFromResponse(response, questionContext) {
     // Only extract truly relevant concepts, not generic ones
     const subject = this.detectSubject(response, { text: [response] });
     const foundConcepts = [];
-    
+
     // Only add the detected subject if it's specific and relevant
-    if (subject && 
-        subject !== 'General' && 
-        subject !== 'Programming General' && 
-        subject !== 'Web Development' &&
-        !subject.includes('General')) {
+    if (subject &&
+      subject !== 'General' &&
+      subject !== 'Programming General' &&
+      subject !== 'Web Development' &&
+      !subject.includes('General')) {
       foundConcepts.push(subject);
     }
-    
+
     // Look for actual concepts mentioned in the content (not generic extraction)
     const conceptPatterns = [
       /ethical principles?/i,
@@ -3592,7 +7062,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       /stakeholder engagement/i,
       /risk assessment/i
     ];
-    
+
     conceptPatterns.forEach(pattern => {
       const matches = response.match(pattern);
       if (matches) {
@@ -3603,11 +7073,11 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         }
       }
     });
-    
+
     // Only return if we found meaningful, specific concepts
     return foundConcepts.length > 0 ? foundConcepts.slice(0, 3) : [];
   }
-  
+
   extractNextStepsFromResponse(response) {
     // Only extract actionable next steps, not generic suggestions
     const stepIndicators = [
@@ -3620,19 +7090,19 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       'start by',
       'begin with'
     ];
-    
+
     const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 25);
-    
+
     const steps = sentences.filter(sentence => {
       const lower = sentence.toLowerCase().trim();
       return stepIndicators.some(indicator => lower.includes(indicator)) &&
-             !lower.includes('resource') &&
-             !lower.includes('link') &&
-             !lower.includes('http') &&
-             lower.length > 30 &&
-             lower.length < 180;
+        !lower.includes('resource') &&
+        !lower.includes('link') &&
+        !lower.includes('http') &&
+        lower.length > 30 &&
+        lower.length < 180;
     }).slice(0, 2);
-    
+
     // Only return meaningful, actionable steps
     return steps.length > 0 && steps[0].length > 30 ? steps : [];
   }
@@ -3640,7 +7110,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
   extractResourcesFromResponse(response, questionContext) {
     // Extract URLs and resource mentions from AI response
     const extractedResources = [];
-    
+
     // Extract URLs with titles/descriptions
     const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
     let match;
@@ -3651,7 +7121,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         description: "Resource mentioned in response"
       });
     }
-    
+
     // Extract plain URLs
     const plainUrlRegex = /(https?:\/\/[^\s]+)/g;
     while ((match = plainUrlRegex.exec(response)) !== null) {
@@ -3659,7 +7129,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       // Skip if already found in markdown format
       if (!extractedResources.some(r => r.url === url)) {
         let title = "Helpful Resource";
-        
+
         // Try to extract a meaningful title from the URL
         if (url.includes('youtube.com') || url.includes('youtu.be')) {
           title = "YouTube Video";
@@ -3678,7 +7148,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         } else if (url.includes('docs.')) {
           title = "Documentation";
         }
-        
+
         extractedResources.push({
           title: title,
           url: url,
@@ -3686,19 +7156,19 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         });
       }
     }
-    
+
     // If no resources were extracted from the response, provide defaults based on subject
     if (extractedResources.length === 0 && questionContext) {
       const subject = this.detectSubject(response, { text: [response] });
       return this.getSubjectResources(subject, response).slice(0, 2);
     }
-    
+
     return extractedResources.slice(0, 4); // Limit to 4 resources
   }
-  
+
   generateResponseTitle(questionContext) {
     const { intent, targetQuestion, subject } = questionContext;
-    
+
     if (targetQuestion) {
       switch (intent) {
         case 'explain':
@@ -3717,12 +7187,12 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           return "Learning Support";
       }
     }
-    
+
     return subject ? `${subject.charAt(0).toUpperCase() + subject.slice(1)} Learning Support` : 'Learning Guidance';
   }
-  
+
   // Additional methods that may have been cut off
-  
+
   parseUserQuestion(userQuestion, pageContent) {
     try {
       // Parse the user's question to get context
@@ -3733,7 +7203,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         subject: null,
         relatedQuestions: []
       };
-      
+
       // Detect intent from question phrases
       if (question.includes('explain') || question.includes('what is') || question.includes('how does')) {
         context.intent = 'explain';
@@ -3744,44 +7214,44 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       } else if (question.includes('resource') || question.includes('where can i find')) {
         context.intent = 'resource';
       }
-      
+
       // Try to identify subject matter from the question
       const subjectMatches = question.match(/\b(math|algebra|calculus|physics|chemistry|biology|history|english|programming|computer science|statistics)\b/i);
       if (subjectMatches) {
         context.subject = subjectMatches[0].toLowerCase();
       }
-      
+
       // Find related questions on the page
       context.relatedQuestions = this.findRelatedQuestionsOnPage(question, pageContent);
-      
+
       // If we found related questions, set the most relevant one as target
       if (context.relatedQuestions.length > 0) {
         context.targetQuestion = context.relatedQuestions[0];
       }
-      
+
       return context;
     } catch (error) {
       console.error("Error parsing user question:", error);
       return { intent: 'learn', targetQuestion: null, subject: null, relatedQuestions: [] };
     }
   }
-  
+
   findRelatedQuestionsOnPage(userQuestion, pageContent) {
     try {
       const userWords = userQuestion.toLowerCase().split(/\s+/).filter(word => word.length > 3);
       const relatedQuestions = [];
-      
+
       if (pageContent.questions.length > 0) {
         // Score each question based on word overlap
         pageContent.questions.forEach(q => {
           const questionText = q.text.toLowerCase();
           const words = questionText.split(/\s+/);
-          
+
           let score = 0;
           userWords.forEach(word => {
             if (questionText.includes(word)) score++;
           });
-          
+
           if (score > 0) {
             relatedQuestions.push({
               text: q.text,
@@ -3790,22 +7260,22 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
             });
           }
         });
-        
+
         // Sort by score (highest first)
         relatedQuestions.sort((a, b) => b.score - a.score);
       }
-      
+
       return relatedQuestions.slice(0, 3); // Return top 3 related questions
     } catch (error) {
       console.error("Error finding related questions:", error);
       return [];
     }
   }
-  
+
   generateEducationalResponse(questionContext, pageContent, platform) {
     // Generate a placeholder response until AI generates the real one
     const { intent, targetQuestion, subject } = questionContext;
-    
+
     return {
       type: 'educational',
       title: 'Analyzing your question...',
@@ -3813,11 +7283,17 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       loading: true
     };
   }
-  
+
   showResponse(response) {
+    console.log('🔊 showResponse called with voice enabled:', this.voiceResponseEnabled, 'voice mode:', this.isInVoiceMode);
+    console.log('Response type:', response.type);
+
     const responseContent = this.chatPanel.querySelector('.kana-response-content');
     responseContent.style.display = 'block';
-    
+
+    // Determine text to speak (will be used for all response types if voice is enabled)
+    let textToSpeak = '';
+
     if (response.type === 'error') {
       responseContent.innerHTML = `
         <div class="kana-error">
@@ -3825,6 +7301,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           <p>${response.content}</p>
         </div>
       `;
+      textToSpeak = `Error: ${response.title}. ${response.content}`;
     } else if (response.type === 'educational' || response.type === 'learning_guidance') {
       // Pure AI response - no generic sections
       let html = `
@@ -3835,15 +7312,53 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           </div>
         </div>
       `;
-      
+
       responseContent.innerHTML = html;
-      
+      textToSpeak = `${response.title}. ${response.content}`;
+
       // Check for YouTube videos in the response and open them in PiP
       this.handleYouTubeVideosInResponse(response.content || response.title || '');
-      
+
+      // Scroll to top of response
+      responseContent.scrollTop = 0;
+    } else {
+      // Handle any other response types (fallback)
+      console.log('🔊 Handling fallback response type:', response.type);
+
+      let html = '';
+      if (typeof response === 'string') {
+        html = `<div class="kana-response"><div class="kana-response-main">${response}</div></div>`;
+        textToSpeak = response;
+      } else if (response.content) {
+        html = `
+          <div class="kana-response">
+            ${response.title ? `<h3>${response.title}</h3>` : ''}
+            <div class="kana-response-main">${response.content}</div>
+          </div>
+        `;
+        textToSpeak = `${response.title || ''}. ${response.content}`;
+      } else {
+        html = `<div class="kana-response"><div class="kana-response-main">Response received</div></div>`;
+        textToSpeak = 'Response received';
+      }
+
+      responseContent.innerHTML = html;
+
+      // Check for YouTube videos in any response
+      this.handleYouTubeVideosInResponse((response.content || response.title || response || '').toString());
+
       // Scroll to top of response
       responseContent.scrollTop = 0;
     }
+
+    // Handle voice response for ALL response types if voice is enabled and not in voice mode
+    if (this.voiceResponseEnabled && !this.isInVoiceMode && textToSpeak) {
+      console.log('🔊 Speaking response in text mode:', textToSpeak.substring(0, 50) + '...');
+      this.speakResponse(textToSpeak);
+    } else {
+      console.log('🔊 Voice not triggered - voiceEnabled:', this.voiceResponseEnabled, 'voiceMode:', this.isInVoiceMode, 'hasText:', !!textToSpeak);
+    }
+    // Note: Voice mode responses are handled separately in voice UI
   }
 
   // Handle YouTube videos found in Kana's response
@@ -3852,25 +7367,25 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       if (this.youtubePiP && typeof response === 'string') {
         // Check if response contains YouTube links or educational content
         const hasYouTubeLinks = /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed)/i.test(response);
-        
+
         if (hasYouTubeLinks) {
           this.log('YouTube videos detected in response, validating before opening PiP...');
-          
+
           // Use URL validator if available to pre-validate URLs
           if (this.urlValidator) {
             // Extract YouTube URLs from response
             const youtubeUrls = response.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/g);
-            
+
             if (youtubeUrls && youtubeUrls.length > 0) {
               // Log what we're about to validate for debugging
               this.log(`Found ${youtubeUrls.length} YouTube URLs to validate: ${youtubeUrls.map(url => url.substring(url.length - 15)).join(', ')}`);
-              
+
               // Validate URLs before attempting to open
               const validatedUrls = await this.urlValidator.filterValidYouTubeUrls(youtubeUrls);
-              
+
               if (validatedUrls.length > 0) {
                 this.log(`Opening ${validatedUrls.length} validated YouTube videos in PiP...`);
-                
+
                 // Small delay to let the response render first
                 setTimeout(() => {
                   // Pass validated URLs directly to avoid re-validation
@@ -3879,7 +7394,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
               } else {
                 // Check if AI response contains YouTube search patterns before falling back
                 const hasYouTubeSearchPatterns = /\{\{YOUTUBE_SEARCH:[^}]+\}\}/g.test(response);
-                
+
                 if (!hasYouTubeSearchPatterns) {
                   this.log('No valid YouTube videos found after validation and no search patterns - trying real video finder', 'warn');
                   await this.findAndOpenRealVideos(response);
@@ -3917,7 +7432,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     try {
       // Extract educational topics from the response
       const topics = this.extractEducationalTopics(response);
-      
+
       if (topics.length === 0) {
         this.log('No educational topics detected for video search');
         return;
@@ -3925,7 +7440,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
 
       this.log(`Searching for real educational videos for topics: ${topics.join(', ')}`);
       const primaryTopic = topics[0];
-      
+
       let realVideos = [];
 
       // Priority 1: Try Live YouTube Search (real API search)
@@ -3933,7 +7448,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         try {
           this.log(`Attempting LIVE YouTube search for: ${primaryTopic}`);
           realVideos = await this.liveYouTubeSearcher.searchEducationalVideos(primaryTopic, 3);
-          
+
           if (realVideos.length > 0) {
             this.log(`✅ LIVE search found ${realVideos.length} real videos for: ${primaryTopic}`);
           } else {
@@ -3948,7 +7463,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       if (realVideos.length === 0 && this.realYouTubeFinder) {
         this.log(`Falling back to static database for: ${primaryTopic}`);
         const staticVideos = await this.realYouTubeFinder.findRealVideos(primaryTopic, 2);
-        
+
         if (staticVideos.length > 0) {
           realVideos = staticVideos;
           this.log(`📚 Static database found ${realVideos.length} videos for: ${primaryTopic}`);
@@ -3958,7 +7473,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       // Open videos in PiP if found
       if (realVideos.length > 0) {
         this.log(`🎥 Opening ${realVideos.length} educational videos in PiP`);
-        
+
         // Pass video objects directly to PiP manager (don't convert to URLs)
         setTimeout(() => {
           this.youtubePiP.openValidatedYouTubeVideos(realVideos);
@@ -4004,7 +7519,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
 
     // Extract technology/topic keywords from text for broader coverage
     const techKeywords = textLower.match(/\b(unity|react|javascript|python|java|c#|html|css|sql|mongodb|docker|kubernetes|aws|azure|firebase|nodejs|express|django|flask|spring|angular|vue|svelte|typescript|php|ruby|go|rust|swift|kotlin|flutter|xamarin|ionic|cordova|webpack|babel|jest|cypress|selenium|git|github|linux|windows|macos|android|ios)\b/gi);
-    
+
     if (techKeywords) {
       // Add unique tech keywords as topics
       const uniqueTechTopics = [...new Set(techKeywords.map(kw => kw.toLowerCase()))];
@@ -4018,15 +7533,15 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     // Also extract from current conversation context
     if (this.conversationContext && this.conversationContext.currentTopic) {
       const currentTopic = this.conversationContext.currentTopic.toLowerCase();
-      if (!nonEducationalTerms.test(currentTopic) && 
-          !educationalTopics.some(topic => topic.includes(currentTopic))) {
+      if (!nonEducationalTerms.test(currentTopic) &&
+        !educationalTopics.some(topic => topic.includes(currentTopic))) {
         educationalTopics.unshift(this.conversationContext.currentTopic); // Add as primary topic
       }
     }
 
     return educationalTopics.slice(0, 3); // Limit to top 3 topics
   }
-  
+
   showError(message) {
     const responseContent = this.chatPanel.querySelector('.kana-response-content');
     responseContent.style.display = 'block';
@@ -4037,7 +7552,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       </div>
     `;
   }
-  
+
   loadPosition() {
     try {
       const storedPosition = localStorage.getItem('kana-position');
@@ -4049,7 +7564,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       console.error('Error loading position:', error);
     }
   }
-  
+
   savePosition() {
     try {
       localStorage.setItem('kana-position', JSON.stringify(this.position));
@@ -4057,7 +7572,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       console.error('Error saving position:', error);
     }
   }
-  
+
   setPosition() {
     // Position from right and top as percentage
     if (this.orbContainer) {
@@ -4065,112 +7580,112 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       this.orbContainer.style.top = `${this.position.y}px`;
     }
   }
-  
+
   startDrag(e) {
     // Don't start drag if locked
     if (this.isLocked) return;
-    
+
     e.preventDefault();
     this.isDragging = true;
-    
+
     // Get touch or mouse position
     const clientX = e.clientX || e.touches[0].clientX;
     const clientY = e.clientY || e.touches[0].clientY;
-    
+
     // Store the offset of the mouse position within the orb
     const orbRect = this.orbContainer.getBoundingClientRect();
     this.dragOffset = {
       x: clientX - orbRect.left,
       y: clientY - orbRect.top
     };
-    
+
     // Add dragging class
     this.orbContainer.classList.add('dragging');
   }
-  
+
   drag(e) {
     if (!this.isDragging) return;
     e.preventDefault();
-    
+
     // Get touch or mouse position
     const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : null);
     const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : null);
-    
+
     if (clientX === null || clientY === null) return;
-    
+
     // Calculate new position
     const newLeft = clientX - this.dragOffset.x;
     const newTop = clientY - this.dragOffset.y;
-    
+
     // Apply new position
     this.orbContainer.style.left = `${newLeft}px`;
     this.orbContainer.style.top = `${newTop}px`;
     this.orbContainer.style.right = 'auto';
     this.orbContainer.style.bottom = 'auto';
-    
+
     // Update position for storage (using pixels now)
     this.position.x = newLeft;
     this.position.y = newTop;
   }
-  
+
   stopDrag() {
     if (!this.isDragging) return;
-    
+
     this.isDragging = false;
     this.orbContainer.classList.remove('dragging');
-    
+
     // Save the new position
     this.savePosition();
   }
-  
+
   toggleLock() {
     this.isLocked = !this.isLocked;
     this.orbContainer.classList.toggle('locked', this.isLocked);
   }
-  
+
   toggleChat() {
     const isVisible = this.chatPanel.classList.contains('visible');
-    
+
     if (isVisible) {
       this.hidePanels();
     } else {
       this.showChatPanel();
     }
   }
-  
+
   showChatPanel() {
     this.chatPanel.classList.add('visible');
     this.positionPanel(this.chatPanel);
-    
+
     // Focus the chat input
     setTimeout(() => {
       const chatInput = this.chatPanel.querySelector('.kana-chat-input');
       if (chatInput) chatInput.focus();
     }, 100);
   }
-  
+
   hidePanels() {
     this.chatPanel.classList.remove('visible');
   }
-  
+
   positionPanel(panel) {
     if (!this.orb) return;
-    
+
     const orbRect = this.orb.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    
+
     // Calculate ideal positions - position BELOW the orb by default
     let left = orbRect.left + (orbRect.width / 2) - (panelRect.width / 2);
     let top = orbRect.bottom + 10;
-    
+
     // Make sure panel stays within viewport horizontally
     if (left < 10) left = 10;
     if (left + panelRect.width > viewportWidth - 10) {
       left = viewportWidth - panelRect.width - 10;
     }
-    
+
     // If panel would go below viewport, position it above the orb
     if (top + panelRect.height > viewportHeight - 10) {
       top = orbRect.top - panelRect.height - 10;
@@ -4178,21 +7693,21 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     } else {
       panel.classList.remove('bottom');
     }
-    
+
     // Apply position
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
   }
-  
+
   updateOrbState(state) {
     if (!this.orb) return;
-    
+
     // Remove all state classes
     this.orb.classList.remove('idle', 'listening', 'thinking', 'speaking');
-    
+
     // Add the current state class
     this.orb.classList.add(state);
-    
+
     // Update the voice indicator
     const voiceIndicator = this.orb.querySelector('.kana-voice-indicator');
     if (voiceIndicator) {
@@ -4203,10 +7718,10 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       }
     }
   }
-  
+
   handleStudyPouchCommand(message) {
     const lowerMessage = message.toLowerCase().trim();
-    
+
     // Define command patterns and corresponding component types
     const commandMap = {
       // Notes/Notepad commands
@@ -4216,7 +7731,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       'show notes': 'notepad',
       'create notes': 'notepad',
       'new notes': 'notepad',
-      
+
       // Pomodoro timer commands
       'open pomodoro': 'pomodoro',
       'open timer': 'pomodoro',
@@ -4224,7 +7739,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       'show timer': 'pomodoro',
       'start pomodoro': 'pomodoro',
       'start timer': 'pomodoro',
-      
+
       // Task tracker commands
       'open tasks': 'task-tracker',
       'open task tracker': 'task-tracker',
@@ -4232,26 +7747,26 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       'show task tracker': 'task-tracker',
       'open todos': 'task-tracker',
       'show todos': 'task-tracker',
-      
+
       // Music player commands
       'open music': 'music',
       'show music': 'music',
       'play music': 'music',
       'music player': 'music',
-      
+
       // Calculator commands
       'open calculator': 'calculator',
       'show calculator': 'calculator',
       'open calc': 'calculator',
       'show calc': 'calculator',
-      
+
       // Video library commands
       'open videos': 'video-library',
       'show videos': 'video-library',
       'open video library': 'video-library',
       'show video library': 'video-library'
     };
-    
+
     // Check for exact command matches
     for (const [command, componentType] of Object.entries(commandMap)) {
       if (lowerMessage === command || lowerMessage.includes(command)) {
@@ -4259,22 +7774,22 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         return true; // Command was handled
       }
     }
-    
+
     // Check for general "open study pouch" command
-    if (lowerMessage.includes('open study pouch') || 
-        lowerMessage.includes('show study pouch') ||
-        lowerMessage.includes('open pouch') ||
-        lowerMessage.includes('show pouch')) {
+    if (lowerMessage.includes('open study pouch') ||
+      lowerMessage.includes('show study pouch') ||
+      lowerMessage.includes('open pouch') ||
+      lowerMessage.includes('show pouch')) {
       this.executeStudyPouchCommand('pouch', 'open study pouch');
       return true;
     }
-    
+
     return false; // No command found
   }
-  
+
   executeStudyPouchCommand(componentType, originalCommand) {
     console.log(`Executing Study Pouch command: ${originalCommand} -> ${componentType}`);
-    
+
     // Display confirmation message
     this.showResponse(`
       <div class="kana-ai-response">
@@ -4283,7 +7798,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         <p>Opening ${this.getComponentDisplayName(componentType)}...</p>
       </div>
     `);
-    
+
     if (componentType === 'pouch') {
       // Open the Study Pouch itself
       if (this.studyPouch) {
@@ -4293,13 +7808,13 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       // Open specific component as standalone floating window
       console.log(`About to call openComponentAsStandalone for: ${componentType}`);
       console.log(`StudyPouchManager exists:`, !!this.studyPouch);
-      
+
       if (this.studyPouch) {
         try {
           console.log(`Calling openComponentAsStandalone(${componentType})`);
           const component = this.studyPouch.openComponentAsStandalone(componentType);
           console.log(`openComponentAsStandalone returned:`, component);
-          
+
           if (component) {
             console.log(`✅ Opened ${componentType} component as standalone`);
             this.showResponse(`
@@ -4333,7 +7848,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       }
     }
   }
-  
+
   getComponentDisplayName(componentType) {
     const displayNames = {
       'notepad': 'Study Notes',
@@ -4346,30 +7861,30 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     };
     return displayNames[componentType] || componentType;
   }
-  
+
   sendChatMessage() {
     const chatInput = this.chatPanel.querySelector('.kana-chat-input');
     const message = chatInput.value.trim();
-    
+
     if (message) {
       console.log('Sending chat message:', message);
       chatInput.value = '';
-      
+
       // Check for Study Pouch commands first
       if (this.handleStudyPouchCommand(message)) {
         return; // Command was handled, don't send to AI
       }
-      
+
       // Process the message with AI
       this.analyzeScreenContent(message);
     }
   }
-  
+
   setupMessageListener() {
     // Listen for messages from popup or options
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.log('Message received:', request);
-      
+
       if (request.action === 'toggleKana') {
         this.toggleChat();
         sendResponse({ result: 'toggled' });
@@ -4394,26 +7909,26 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           sendResponse({ result: 'study pouch not available' });
         }
       }
-      
+
       // Return true to indicate we'll send a response asynchronously
       return true;
     });
   }
-      
+
   updateSettings(settings) {
     console.log('Updating settings:', settings);
-    
+
     // Update wake phrases if provided
     if (settings.wakeWords && Array.isArray(settings.wakeWords)) {
       this.wakePhrases = settings.wakeWords;
     }
-    
+
     // Update adaptive colors if setting changed
     if (settings.kanaAdaptiveColors !== undefined) {
       this.useAdaptiveColors = settings.kanaAdaptiveColors;
       this.useAdaptiveColors ? this.applyAdaptiveColors() : this.applyDefaultColors();
     }
-    
+
     // Update glass settings if provided
     if (settings.glassColorPanel !== undefined) {
       this.glassSettings.panelColor = settings.glassColorPanel;
@@ -4436,24 +7951,24 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     if (settings.glassDepth !== undefined) {
       this.glassSettings.depth = settings.glassDepth;
     }
-    
+
     // Apply glass theme if any glass settings were updated
     if (settings.glassColorPanel !== undefined || settings.glassColorOrb !== undefined ||
-        settings.glassOpacity !== undefined || settings.glassBlur !== undefined ||
-        settings.glassSaturation !== undefined || settings.glassBrightness !== undefined ||
-        settings.glassDepth !== undefined) {
+      settings.glassOpacity !== undefined || settings.glassBlur !== undefined ||
+      settings.glassSaturation !== undefined || settings.glassBrightness !== undefined ||
+      settings.glassDepth !== undefined) {
       this.applyGlassTheme();
     }
-    
+
     // Apply any other settings
     // ...
   }
-    
+
   applyAdaptiveColors() {
     try {
       // Sample colors from the page
       const colors = this.sampleBackgroundColors();
-      
+
       // Apply to orb and panels
       this.adaptOrbColors(colors);
       this.adaptPanelBackground(colors);
@@ -4462,53 +7977,53 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       this.applyDefaultColors();
     }
   }
-  
+
   applyDefaultColors() {
     // Reset to default color scheme
     this.orbContainer.classList.remove('adaptive-colors');
     this.chatPanel.classList.remove('adaptive-colors');
   }
-  
+
   adaptOrbColors(colors) {
     if (!colors || !colors.main) return;
-    
+
     // Get the orb container
     const orb = this.orbContainer;
     orb.classList.add('adaptive-colors');
-    
+
     const mainColor = colors.main;
-    
+
     // Create complementary colors for better visual appeal
     const lightColor = this.lightenColor(mainColor, 0.3);
     const darkColor = this.darkenColor(mainColor, 0.2);
-    
+
     // Apply adaptive background and border to orb, but NEVER change the icon color
-    orb.style.setProperty('--kana-adaptive-bg', 
+    orb.style.setProperty('--kana-adaptive-bg',
       `linear-gradient(135deg, 
         rgba(${mainColor.r}, ${mainColor.g}, ${mainColor.b}, 0.4) 0%, 
         rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 0.2) 100%)`);
-    orb.style.setProperty('--kana-adaptive-border', 
+    orb.style.setProperty('--kana-adaptive-border',
       `rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 0.6)`);
-    orb.style.setProperty('--kana-adaptive-shadow', 
+    orb.style.setProperty('--kana-adaptive-shadow',
       `0 8px 32px rgba(${darkColor.r}, ${darkColor.g}, ${darkColor.b}, 0.3)`);
-    
+
     // IMPORTANT: Do NOT set --kana-adaptive-text for orb - let CSS keep icon white
-    
+
     console.log('Applied adaptive colors to orb (keeping logo white):', mainColor);
   }
-  
+
   adaptPanelBackground(colors) {
     if (!colors || !colors.main) return;
-    
+
     // Get the panel
     const panel = this.chatPanel;
     panel.classList.add('adaptive-colors');
-    
+
     const mainColor = colors.main;
-    
+
     // Improved contrast calculation for better readability
     const brightness = this.calculateColorBrightness(mainColor);
-    
+
     // More aggressive contrast - use darker text on light backgrounds, brighter text on dark backgrounds
     let textColor;
     if (brightness > 140) {
@@ -4521,24 +8036,24 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       // Dark background - use bright white text
       textColor = 'rgba(255, 255, 255, 0.95)';
     }
-    
+
     // Create subtle variations
     const lightColor = this.lightenColor(mainColor, 0.4);
     const darkColor = this.darkenColor(mainColor, 0.1);
-    
+
     // Apply styles with enhanced glassmorphic effect
-    panel.style.setProperty('--kana-adaptive-bg', 
+    panel.style.setProperty('--kana-adaptive-bg',
       `linear-gradient(135deg, 
         rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 0.12) 0%, 
         rgba(${mainColor.r}, ${mainColor.g}, ${mainColor.b}, 0.08) 100%)`);
-    panel.style.setProperty('--kana-adaptive-border', 
+    panel.style.setProperty('--kana-adaptive-border',
       `rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 0.3)`);
     panel.style.setProperty('--kana-adaptive-text', textColor);
-    panel.style.setProperty('--kana-adaptive-shadow', 
+    panel.style.setProperty('--kana-adaptive-shadow',
       `0 20px 60px rgba(${darkColor.r}, ${darkColor.g}, ${darkColor.b}, 0.2)`);
-    
+
     console.log(`Applied adaptive colors to panel - brightness: ${brightness}, text: ${textColor}:`, mainColor);
-    
+
     // Update Study Pouch theme to match adaptive colors (throttled)
     if (this.studyPouch && typeof this.studyPouch.updateTheme === 'function') {
       // Throttle theme updates to prevent spam
@@ -4552,30 +8067,30 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       }
     }
   }
-  
+
   sampleBackgroundColors() {
     // Sample colors from the page background more comprehensively
     const samples = [];
-    
+
     // Add body background
     const bodyBg = window.getComputedStyle(document.body).backgroundColor;
     if (bodyBg && bodyBg !== 'rgba(0, 0, 0, 0)' && bodyBg !== 'transparent') {
       samples.push(bodyBg);
     }
-    
+
     // Add html background
     const htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
     if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') {
       samples.push(htmlBg);
     }
-    
+
     // Add element background colors with priority order
     const elements = [
-      'main', 'article', 'section', 'header', 'nav', 
+      'main', 'article', 'section', 'header', 'nav',
       '.content', '.main-content', '.page-content', '.container',
       '[class*="content"]', '[class*="main"]', '[class*="page"]'
     ];
-    
+
     elements.forEach(selector => {
       const el = document.querySelector(selector);
       if (el) {
@@ -4585,7 +8100,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         }
       }
     });
-    
+
     // Get colors from largest visible elements
     const largeElements = Array.from(document.querySelectorAll('div, section, main, article'))
       .filter(el => {
@@ -4593,19 +8108,19 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         return rect.width > 200 && rect.height > 100;
       })
       .slice(0, 5);
-    
+
     largeElements.forEach(el => {
       const bg = window.getComputedStyle(el).backgroundColor;
       if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
         samples.push(bg);
       }
     });
-    
+
     if (samples.length === 0) {
       // Default fallback
       return { main: { r: 100, g: 150, b: 220, a: 1 } };
     }
-    
+
     // Find the most suitable color (avoid pure white/black/transparent)
     for (const sample of samples) {
       const color = this.parseColor(sample);
@@ -4618,7 +8133,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         }
       }
     }
-    
+
     // If no suitable color found, use first valid color
     for (const sample of samples) {
       const color = this.parseColor(sample);
@@ -4627,12 +8142,12 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
         return { main: color };
       }
     }
-    
+
     // Ultimate fallback
     console.log('Using ultimate fallback color');
     return { main: { r: 100, g: 150, b: 220, a: 1 } };
   }
-  
+
   lightenColor(color, amount) {
     return {
       r: Math.min(255, Math.floor(color.r + (255 - color.r) * amount)),
@@ -4641,7 +8156,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       a: color.a
     };
   }
-  
+
   darkenColor(color, amount) {
     return {
       r: Math.max(0, Math.floor(color.r * (1 - amount))),
@@ -4650,10 +8165,10 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
       a: color.a
     };
   }
-  
+
   parseColor(colorStr) {
     if (!colorStr) return null;
-    
+
     try {
       // Handle rgb/rgba
       if (colorStr.startsWith('rgb')) {
@@ -4667,7 +8182,7 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
           };
         }
       }
-      
+
       // Handle hex
       if (colorStr.startsWith('#')) {
         const hex = colorStr.substring(1);
@@ -4679,26 +8194,26 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     } catch (error) {
       console.warn('Error parsing color:', error);
     }
-    
+
     return null;
   }
-  
+
   calculateColorBrightness(color) {
     return (color.r * 299 + color.g * 587 + color.b * 114) / 1000;
   }
-  
+
   async getAvailableGeminiModels(apiKey) {
     // Check which Gemini models are available
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
-      
+
       if (response.ok) {
         const data = await response.json();
-        const models = data.models?.filter(model => 
-          model.name.includes('gemini') && 
+        const models = data.models?.filter(model =>
+          model.name.includes('gemini') &&
           model.supportedGenerationMethods?.includes('generateContent')
         ).map(model => model.name.split('/').pop()) || [];
-        
+
         console.log("Available Gemini models from API:", models);
         return models;
       } else {
@@ -4714,71 +8229,71 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
   generateContextualHints(pageContent, userQuestion) {
     // Generate contextual hints based on page content
     const hints = [];
-    
+
     // If there are code blocks, suggest code analysis
     if (pageContent.codeBlocks.length > 0) {
       hints.push("Examine the code examples on this page - try to understand what each part does");
     }
-    
+
     // If there are many questions, suggest systematic approach
     if (pageContent.questions.length > 5) {
       hints.push("This page has many questions - try tackling them one at a time");
     }
-    
+
     // If there are assignments, suggest breaking them down
     if (pageContent.assignments.length > 0) {
       hints.push("Break down the assignments into smaller tasks and tackle them step by step");
     }
-    
+
     // If there are learning objectives, suggest reviewing them
     if (pageContent.learningObjectives.length > 0) {
       hints.push("Review the learning objectives to understand what you should focus on");
     }
-    
+
     // Based on user question intent
     const question = userQuestion.toLowerCase();
     if (question.includes('how') || question.includes('what')) {
       hints.push("Try to find definitions and explanations in the course materials");
     }
-    
+
     if (question.includes('why')) {
       hints.push("Look for cause-and-effect relationships in the content");
     }
-    
+
     if (question.includes('when') || question.includes('where')) {
       hints.push("Focus on context and conditions mentioned in the materials");
     }
-    
+
     // Default hints if none specific were added
     if (hints.length === 0) {
       hints.push("Try to identify the key concepts in this material");
       hints.push("Connect these ideas to previous lessons");
     }
-    
+
     return hints.slice(0, 4); // Return max 4 hints
   }
 
   generateContextualNextSteps(pageContent, platform) {
     // Generate next steps based on page content
     const steps = [];
-    
+
     // Based on content type
     if (pageContent.codeBlocks.length > 0) {
       steps.push("Try running or modifying the code examples to see how they work");
     }
-    
+
     if (pageContent.questions.length > 0) {
       steps.push("Work through the practice questions to test your understanding");
     }
-    
+
     if (pageContent.assignments.length > 0) {
       steps.push("Start with the assignment requirements and create a plan");
     }
-    
+
     if (pageContent.links.length > 0) {
       steps.push("Explore the additional resources and links provided");
     }
-    
+
     // Platform-specific suggestions
     if (platform === 'ALU') {
       steps.push("Check the project rubric and requirements carefully");
@@ -4788,60 +8303,60 @@ Focus entirely on what they're currently viewing and provide specific, helpful g
     } else if (platform === 'Holberton') {
       steps.push("Apply the concepts through practical exercises");
     }
-    
+
     // Default steps
     if (steps.length === 0) {
       steps.push("Review related course materials");
       steps.push("Try practice problems to reinforce understanding");
       steps.push("Discuss concepts with classmates");
     }
-    
+
     return steps.slice(0, 4); // Return max 4 steps
   }
 
   generatePageInsights(pageContent, userQuestion) {
     // Generate insights about the current page content
     const insights = [];
-    
+
     // Analyze content complexity
     const avgHeadingLength = pageContent.headings.reduce((sum, h) => sum + h.text.length, 0) / pageContent.headings.length;
     const avgTextLength = pageContent.text.reduce((sum, t) => sum + t.length, 0) / pageContent.text.length;
-    
+
     if (pageContent.codeBlocks.length > 0) {
       const languages = [...new Set(pageContent.codeBlocks.map(cb => cb.language))];
       insights.push(`📝 Found ${pageContent.codeBlocks.length} code examples in: ${languages.join(', ')}`);
     }
-    
+
     if (pageContent.questions.length > 10) {
       insights.push(`❓ This page has ${pageContent.questions.length} questions - consider working through them systematically`);
     } else if (pageContent.questions.length > 0) {
       insights.push(`❓ Found ${pageContent.questions.length} questions to help test your understanding`);
     }
-    
+
     if (pageContent.assignments.length > 0) {
       insights.push(`📋 ${pageContent.assignments.length} assignment(s) detected - review requirements carefully`);
     }
-    
+
     if (pageContent.learningObjectives.length > 0) {
       insights.push(`🎯 Learning objectives are defined - use them to guide your focus`);
     }
-    
+
     // Check for common topics
     const allText = pageContent.title + ' ' + pageContent.text.join(' ');
     const lowerText = allText.toLowerCase();
-    
+
     if (lowerText.includes('unity') || lowerText.includes('shader')) {
       insights.push(`🎮 This appears to be about Unity/Shader development - focus on practical implementation`);
     }
-    
+
     if (lowerText.includes('algorithm') || lowerText.includes('complexity')) {
       insights.push(`⚡ Algorithm content detected - consider time/space complexity when learning`);
     }
-    
+
     if (lowerText.includes('database') || lowerText.includes('sql')) {
       insights.push(`🗄️ Database content - try to understand relationships between concepts`);
     }
-    
+
     return insights.slice(0, 3); // Return max 3 insights
   }
 

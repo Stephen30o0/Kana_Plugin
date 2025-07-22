@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice UI Drag & Resize Test - Kana Assistant</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .test-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .test-button {
+            background: linear-gradient(135deg, #4A90E2, #357ABD);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-family: monospace;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            color: #E8F4FD;
+            margin-bottom: 15px;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            background: rgba(255, 255, 255, 0.1);
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4A90E2;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+        <h1>🎤 Voice UI Drag & Resize Test</h1>
+
+        <div class="test-section">
+            <h2>🔄 New Features Implemented</h2>
+            <ul class="feature-list">
+                <li><strong>Movable UI:</strong> Drag the voice UI anywhere on screen using the drag handle</li>
+                <li><strong>Resizable UI:</strong> Three sizes - Small (1 inch), Medium, Large</li>
+                <li><strong>Simple Greeting:</strong> Just says "How can I help you?" instead of long intro</li>
+                <li><strong>Size Cycling:</strong> Click the resize button to cycle through sizes</li>
+                <li><strong>Corner Resize:</strong> Drag the corner handle to manually resize</li>
+                <li><strong>Responsive Design:</strong> UI adapts to different sizes automatically</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 Testing Instructions</h2>
+            <ol>
+                <li>Click "Activate Voice UI" to open the voice interface</li>
+                <li>Try dragging the UI using the top drag handle</li>
+                <li>Click the resize button to cycle through sizes</li>
+                <li>Drag the corner handle to manually resize</li>
+                <li>Test the simplified greeting message</li>
+                <li>Check that all sizes work correctly</li>
+            </ol>
+
+            <button class="test-button" onclick="activateVoiceUI()">🎤 Activate Voice UI</button>
+            <button class="test-button" onclick="testSizeCycling()">🔄 Test Size Cycling</button>
+            <button class="test-button" onclick="testPositioning()">📍 Test Positioning</button>
+            <button class="test-button" onclick="clearStatus()">🧹 Clear Status</button>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Test Status</h2>
+            <div id="status" class="status">
+                Ready to test voice UI drag and resize functionality...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let testKana = null;
+
+        function log(message) {
+            const status = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+            status.innerHTML += `[${timestamp}] ${message}<br>`;
+            status.scrollTop = status.scrollHeight;
+            console.log('🧪 Test:', message);
+        }
+
+        function clearStatus() {
+            document.getElementById('status').innerHTML = 'Status cleared...<br>';
+        }
+
+        function activateVoiceUI() {
+            log('🎤 Activating voice UI...');
+
+            // Check if Kana Assistant is available
+            if (typeof window.KanaAssistant !== 'undefined') {
+                if (!testKana) {
+                    testKana = new window.KanaAssistant();
+                    log('✅ Kana Assistant initialized');
+                }
+
+                // Enable voice response and create UI
+                testKana.voiceResponseEnabled = true;
+                testKana.createVoiceUI();
+                log('✅ Voice UI created with drag & resize capabilities');
+
+                // Test the simplified greeting
+                setTimeout(() => {
+                    if (testKana.voiceUI) {
+                        log('🎯 Testing simplified greeting...');
+                        testKana.speakConversationalResponse("How can I help you?");
+                    }
+                }, 1000);
+
+            } else {
+                log('❌ Kana Assistant not found - loading content script...');
+
+                // Try to load the content script for testing
+                const script = document.createElement('script');
+                script.src = 'content.js';
+                script.onload = () => {
+                    log('✅ Content script loaded, try again');
+                };
+                script.onerror = () => {
+                    log('❌ Failed to load content script');
+                };
+                document.head.appendChild(script);
+            }
+        }
+
+        function testSizeCycling() {
+            log('🔄 Testing size cycling...');
+
+            if (testKana && testKana.voiceUI) {
+                const currentSize = testKana.voiceUISize || 'medium';
+                log(`📏 Current size: ${currentSize}`);
+
+                testKana.cycleVoiceUISize();
+
+                setTimeout(() => {
+                    const newSize = testKana.voiceUISize;
+                    log(`📏 New size: ${newSize}`);
+                    log(`✅ Size cycling test completed`);
+                }, 500);
+            } else {
+                log('❌ Voice UI not active - activate it first');
+            }
+        }
+
+        function testPositioning() {
+            log('📍 Testing positioning system...');
+
+            if (testKana && testKana.voiceUI) {
+                const currentPos = testKana.voiceUIPosition;
+                log(`📍 Current position: x=${currentPos.x}, y=${currentPos.y}`);
+
+                // Test moving to different positions
+                testKana.voiceUIPosition = { x: 100, y: 100 };
+                testKana.applyVoiceUIPosition();
+                log('📍 Moved to position: x=100, y=100');
+
+                setTimeout(() => {
+                    testKana.voiceUIPosition = { x: 300, y: 200 };
+                    testKana.applyVoiceUIPosition();
+                    log('📍 Moved to position: x=300, y=200');
+                    log('✅ Positioning test completed');
+                }, 1000);
+            } else {
+                log('❌ Voice UI not active - activate it first');
+            }
+        }
+
+        // Auto-load styles when page loads
+        window.addEventListener('load', () => {
+            log('🌟 Voice UI Drag & Resize Test Page Loaded');
+            log('🎯 Ready to test new functionality!');
+
+            // Try to load styles
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'kana-styles.css';
+            link.onload = () => {
+                log('✅ Kana styles loaded');
+            };
+            document.head.appendChild(link);
+        });
+    </script>
+</body>
+
+</html>

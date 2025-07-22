@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny Voice UI Test - Kana Assistant</title>
+    <link rel="stylesheet" href="kana-styles.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .test-button {
+            background: linear-gradient(135deg, #4A90E2, #357ABD);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .feature-highlight {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #4A90E2;
+        }
+
+        .size-demo {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .size-demo .demo-circle {
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4A90E2, #357ABD);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .tiny {
+            width: 60px;
+            height: 60px;
+            font-size: 10px;
+        }
+
+        .expanded {
+            width: 120px;
+            height: 120px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+        <h1>🎤 Tiny Voice UI - Final Version</h1>
+
+        <div class="feature-highlight">
+            <h2>✨ Key Features</h2>
+            <ul>
+                <li><strong>Truly Tiny:</strong> Starts at just 60px (1 inch) - smallest possible functional size</li>
+                <li><strong>Click to Expand:</strong> Click the tiny orb to expand to full functionality</li>
+                <li><strong>Movable:</strong> Drag anywhere on screen - perfect positioning</li>
+                <li><strong>Simple Greeting:</strong> Just says "How can I help you?" - no long intro</li>
+                <li><strong>Visual Status:</strong> Color-coded status dot shows voice state</li>
+                <li><strong>Theme Aware:</strong> Adapts to your color scheme automatically</li>
+            </ul>
+        </div>
+
+        <div class="size-demo">
+            <div class="demo-circle tiny">TINY</div>
+            <div>→ Click to expand →</div>
+            <div class="demo-circle expanded">EXPANDED</div>
+        </div>
+
+        <div class="feature-highlight">
+            <h2>🎯 Test Instructions</h2>
+            <ol>
+                <li>Click "Activate Tiny Voice UI" to create the 1-inch interface</li>
+                <li>Notice the tiny orb in the top-right corner</li>
+                <li>Try dragging it around the screen</li>
+                <li>Click the orb to expand it</li>
+                <li>Test voice features in expanded mode</li>
+                <li>Click minimize to shrink back to tiny mode</li>
+            </ol>
+        </div>
+
+        <div style="text-align: center;">
+            <button class="test-button" onclick="activateTinyVoiceUI()">🎤 Activate Tiny Voice UI</button>
+            <button class="test-button" onclick="testExpansion()">🔄 Test Expand/Collapse</button>
+            <button class="test-button" onclick="testDragging()">📍 Test Dragging</button>
+            <button class="test-button" onclick="clearStatus()">🧹 Clear Log</button>
+        </div>
+
+        <div class="status" id="status">
+            Ready to test the new tiny voice UI...<br>
+        </div>
+    </div>
+
+    <script src="content.js"></script>
+    <script>
+        let testKana = null;
+
+        function log(message) {
+            const status = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+            status.innerHTML += `[${timestamp}] ${message}<br>`;
+            status.scrollTop = status.scrollHeight;
+            console.log('🧪 Test:', message);
+        }
+
+        function clearStatus() {
+            document.getElementById('status').innerHTML = 'Status cleared...<br>';
+        }
+
+        function activateTinyVoiceUI() {
+            log('🎤 Creating tiny voice UI...');
+
+            try {
+                if (!testKana) {
+                    testKana = new KanaAssistant();
+                    log('✅ Kana Assistant initialized');
+                }
+
+                // Enable voice response and create tiny UI
+                testKana.voiceResponseEnabled = true;
+                testKana.createVoiceUI();
+
+                log('✅ Tiny Voice UI created successfully!');
+                log('🎯 Look for the tiny orb in the top-right corner');
+                log('📝 Size: 60px x 60px (approximately 1 inch)');
+
+            } catch (error) {
+                log('❌ Error creating voice UI: ' + error.message);
+            }
+        }
+
+        function testExpansion() {
+            if (!testKana || !testKana.voiceUI) {
+                log('❌ Voice UI not active - activate it first');
+                return;
+            }
+
+            log('🔄 Testing expand/collapse functionality...');
+
+            const wasExpanded = testKana.isExpanded;
+            testKana.toggleVoiceUIExpansion();
+
+            setTimeout(() => {
+                const isNowExpanded = testKana.isExpanded;
+                if (isNowExpanded !== wasExpanded) {
+                    log(`✅ Expansion toggle successful: ${wasExpanded ? 'collapsed' : 'expanded'}`);
+                } else {
+                    log('❌ Expansion toggle failed');
+                }
+            }, 300);
+        }
+
+        function testDragging() {
+            if (!testKana || !testKana.voiceUI) {
+                log('❌ Voice UI not active - activate it first');
+                return;
+            }
+
+            log('📍 Testing drag functionality...');
+            log('🎯 Try dragging the voice UI to different positions');
+
+            const currentPos = testKana.voiceUIPosition;
+            log(`📍 Current position: x=${currentPos.x}, y=${currentPos.y}`);
+
+            // Simulate position change
+            setTimeout(() => {
+                testKana.voiceUIPosition = { x: 100, y: 100 };
+                testKana.applyVoiceUIPosition();
+                log('📍 Moved to test position: x=100, y=100');
+
+                setTimeout(() => {
+                    testKana.voiceUIPosition = { x: window.innerWidth - 70, y: 50 };
+                    testKana.applyVoiceUIPosition();
+                    log('📍 Moved back to default position');
+                    log('✅ Dragging test completed');
+                }, 1000);
+            }, 1000);
+        }
+
+        // Auto-load and show features
+        window.addEventListener('load', () => {
+            log('🌟 Tiny Voice UI Test Page Loaded');
+            log('🎯 This version is designed to be truly tiny (1 inch) and highly responsive');
+            log('📋 Features: Tiny mode (60px), expandable, draggable, simple greeting');
+        });
+    </script>
+</body>
+
+</html>

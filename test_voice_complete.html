@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Voice Feature Test - Kana AI</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            color: white;
+        }
+
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .test-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .test-section h2 {
+            color: #fff;
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status.pass {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .status.fail {
+            background: #f44336;
+            color: white;
+        }
+
+        .status.pending {
+            background: #ff9800;
+            color: white;
+        }
+
+        .test-button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .test-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .log-output {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .voice-test-area {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .voice-status {
+            font-size: 18px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .instruction {
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .warning {
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+        <h1>🎤 Complete Voice Feature Test</h1>
+
+        <div class="instruction">
+            <strong>Instructions:</strong>
+            <ol>
+                <li>This page will test all voice features of the Kana AI extension</li>
+                <li>Make sure the extension is loaded and active</li>
+                <li>Click through each test to verify functionality</li>
+                <li>Check the console logs for detailed debugging information</li>
+            </ol>
+        </div>
+
+        <!-- Voice System Initialization Test -->
+        <div class="test-section">
+            <h2>1. Voice System Initialization <span id="init-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testVoiceInitialization()">Test Voice Initialization</button>
+            <div id="init-log" class="log-output"></div>
+        </div>
+
+        <!-- Voice Toggle Test -->
+        <div class="test-section">
+            <h2>2. Voice Toggle Functionality <span id="toggle-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testVoiceToggle()">Test Voice Toggle</button>
+            <div class="voice-test-area">
+                <div class="voice-status" id="voice-toggle-status">Voice Status: Unknown</div>
+            </div>
+            <div id="toggle-log" class="log-output"></div>
+        </div>
+
+        <!-- Voice UI Switching Test -->
+        <div class="test-section">
+            <h2>3. Voice UI Switching <span id="ui-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testVoiceUI()">Test Voice UI Switch</button>
+            <div class="voice-test-area">
+                <div class="voice-status" id="voice-ui-status">UI Mode: Unknown</div>
+            </div>
+            <div id="ui-log" class="log-output"></div>
+        </div>
+
+        <!-- Voice Response Test -->
+        <div class="test-section">
+            <h2>4. Voice Response (Text Mode) <span id="response-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testVoiceResponse()">Test Voice Response</button>
+            <div class="voice-test-area">
+                <div class="voice-status" id="speech-status">Speech Status: Ready</div>
+            </div>
+            <div id="response-log" class="log-output"></div>
+        </div>
+
+        <!-- Female Voice Selection Test -->
+        <div class="test-section">
+            <h2>5. Female Voice Selection <span id="voice-select-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testFemaleVoiceSelection()">Test Female Voice</button>
+            <div id="voice-select-log" class="log-output"></div>
+        </div>
+
+        <!-- Conversational Response Test -->
+        <div class="test-section">
+            <h2>6. Conversational Response Generation <span id="conv-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testConversationalResponse()">Test Conversational Response</button>
+            <div id="conv-log" class="log-output"></div>
+        </div>
+
+        <!-- Complete Integration Test -->
+        <div class="test-section">
+            <h2>7. Complete Integration Test <span id="integration-status" class="status pending">PENDING</span></h2>
+            <button class="test-button" onclick="testCompleteIntegration()">Run Full Integration Test</button>
+            <div class="warning">
+                <strong>Note:</strong> This test will ask Kana AI a question and expect a voice response. Make sure Kana
+                is visible on the page.
+            </div>
+            <div id="integration-log" class="log-output"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Test Summary</h2>
+            <div id="test-summary">
+                <div>Total Tests: 7</div>
+                <div id="summary-passed">Passed: 0</div>
+                <div id="summary-failed">Failed: 0</div>
+                <div id="summary-pending">Pending: 7</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let testResults = {
+            passed: 0,
+            failed: 0,
+            pending: 7
+        };
+
+        function updateTestSummary() {
+            document.getElementById('summary-passed').textContent = `Passed: ${testResults.passed}`;
+            document.getElementById('summary-failed').textContent = `Failed: ${testResults.failed}`;
+            document.getElementById('summary-pending').textContent = `Pending: ${testResults.pending}`;
+        }
+
+        function setTestStatus(testId, status, message) {
+            const statusEl = document.getElementById(`${testId}-status`);
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = status.toUpperCase();
+
+            if (status === 'pass') {
+                testResults.passed++;
+                testResults.pending--;
+            } else if (status === 'fail') {
+                testResults.failed++;
+                testResults.pending--;
+            }
+            updateTestSummary();
+        }
+
+        function logMessage(logId, message, type = 'info') {
+            const logEl = document.getElementById(`${logId}-log`);
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#ff6b6b' : type === 'success' ? '#51cf66' : '#74c0fc';
+            logEl.innerHTML += `<div style="color: ${color};">[${timestamp}] ${message}</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${testId}] ${message}`);
+        }
+
+        async function testVoiceInitialization() {
+            logMessage('init', '🧪 Testing voice system initialization...');
+
+            try {
+                // Check if Kana is available
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('init', '❌ Kana Assistant not found - extension may not be loaded', 'error');
+                    setTestStatus('init', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+
+                // Check voice response system
+                logMessage('init', '🔍 Checking voice response system...');
+
+                if (kana.speechSynthesis) {
+                    logMessage('init', '✅ Speech synthesis available', 'success');
+                } else {
+                    logMessage('init', '❌ Speech synthesis not initialized', 'error');
+                    setTestStatus('init', 'fail');
+                    return;
+                }
+
+                if (kana.voiceResponseEnabled !== undefined) {
+                    logMessage('init', `✅ Voice response enabled: ${kana.voiceResponseEnabled}`, 'success');
+                } else {
+                    logMessage('init', '❌ Voice response state undefined', 'error');
+                }
+
+                logMessage('init', '✅ Voice system initialization test passed', 'success');
+                setTestStatus('init', 'pass');
+
+            } catch (error) {
+                logMessage('init', `❌ Error during initialization test: ${error.message}`, 'error');
+                setTestStatus('init', 'fail');
+            }
+        }
+
+        async function testVoiceToggle() {
+            logMessage('toggle', '🧪 Testing voice toggle functionality...');
+
+            try {
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('toggle', '❌ Kana Assistant not found', 'error');
+                    setTestStatus('toggle', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+                const initialState = kana.voiceResponseEnabled;
+
+                logMessage('toggle', `Initial voice state: ${initialState}`);
+                document.getElementById('voice-toggle-status').textContent = `Voice Status: ${initialState ? 'Enabled' : 'Disabled'}`;
+
+                // Test toggle functionality
+                if (typeof kana.toggleVoiceResponse === 'function') {
+                    logMessage('toggle', '🔄 Toggling voice response...');
+                    await kana.toggleVoiceResponse();
+
+                    const newState = kana.voiceResponseEnabled;
+                    logMessage('toggle', `New voice state: ${newState}`);
+                    document.getElementById('voice-toggle-status').textContent = `Voice Status: ${newState ? 'Enabled' : 'Disabled'}`;
+
+                    if (newState !== initialState) {
+                        logMessage('toggle', '✅ Voice toggle successful', 'success');
+                        setTestStatus('toggle', 'pass');
+                    } else {
+                        logMessage('toggle', '❌ Voice state did not change', 'error');
+                        setTestStatus('toggle', 'fail');
+                    }
+                } else {
+                    logMessage('toggle', '❌ toggleVoiceResponse method not found', 'error');
+                    setTestStatus('toggle', 'fail');
+                }
+
+            } catch (error) {
+                logMessage('toggle', `❌ Error during toggle test: ${error.message}`, 'error');
+                setTestStatus('toggle', 'fail');
+            }
+        }
+
+        async function testVoiceUI() {
+            logMessage('ui', '🧪 Testing voice UI switching...');
+
+            try {
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('ui', '❌ Kana Assistant not found', 'error');
+                    setTestStatus('ui', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+
+                // Test switching to voice UI
+                if (typeof kana.switchToVoiceUI === 'function') {
+                    logMessage('ui', '🔄 Switching to voice UI...');
+                    await kana.switchToVoiceUI();
+
+                    // Check if voice UI is active
+                    if (kana.isInVoiceMode) {
+                        logMessage('ui', '✅ Successfully switched to voice UI', 'success');
+                        document.getElementById('voice-ui-status').textContent = 'UI Mode: Voice UI';
+
+                        // Test switching back to text UI
+                        setTimeout(async () => {
+                            if (typeof kana.switchToTextUI === 'function') {
+                                logMessage('ui', '🔄 Switching back to text UI...');
+                                await kana.switchToTextUI();
+
+                                if (!kana.isInVoiceMode) {
+                                    logMessage('ui', '✅ Successfully switched back to text UI', 'success');
+                                    document.getElementById('voice-ui-status').textContent = 'UI Mode: Text UI';
+                                    setTestStatus('ui', 'pass');
+                                } else {
+                                    logMessage('ui', '❌ Failed to switch back to text UI', 'error');
+                                    setTestStatus('ui', 'fail');
+                                }
+                            }
+                        }, 2000);
+
+                    } else {
+                        logMessage('ui', '❌ Voice UI not activated', 'error');
+                        setTestStatus('ui', 'fail');
+                    }
+                } else {
+                    logMessage('ui', '❌ switchToVoiceUI method not found', 'error');
+                    setTestStatus('ui', 'fail');
+                }
+
+            } catch (error) {
+                logMessage('ui', `❌ Error during UI test: ${error.message}`, 'error');
+                setTestStatus('ui', 'fail');
+            }
+        }
+
+        async function testVoiceResponse() {
+            logMessage('response', '🧪 Testing voice response in text mode...');
+
+            try {
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('response', '❌ Kana Assistant not found', 'error');
+                    setTestStatus('response', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+
+                // Ensure we're in text mode and voice is enabled
+                if (kana.isInVoiceMode) {
+                    await kana.switchToTextUI();
+                }
+
+                if (!kana.voiceResponseEnabled) {
+                    await kana.toggleVoiceResponse();
+                }
+
+                logMessage('response', '🔊 Testing speech synthesis...');
+                document.getElementById('speech-status').textContent = 'Speech Status: Testing...';
+
+                const testText = "Hello! This is a test of the voice response system. If you can hear this, the voice response is working correctly.";
+
+                if (typeof kana.speakResponse === 'function') {
+                    await kana.speakResponse(testText);
+                    logMessage('response', '✅ Voice response test initiated', 'success');
+                    document.getElementById('speech-status').textContent = 'Speech Status: Speaking...';
+
+                    // Check if speech is working
+                    setTimeout(() => {
+                        if (kana.isSpeaking) {
+                            logMessage('response', '✅ Speech is active', 'success');
+                            setTestStatus('response', 'pass');
+                        } else {
+                            logMessage('response', '⚠️ Speech status unclear, check audio', 'error');
+                            setTestStatus('response', 'fail');
+                        }
+                        document.getElementById('speech-status').textContent = 'Speech Status: Complete';
+                    }, 1000);
+                } else {
+                    logMessage('response', '❌ speakResponse method not found', 'error');
+                    setTestStatus('response', 'fail');
+                }
+
+            } catch (error) {
+                logMessage('response', `❌ Error during voice response test: ${error.message}`, 'error');
+                setTestStatus('response', 'fail');
+            }
+        }
+
+        async function testFemaleVoiceSelection() {
+            logMessage('voice-select', '🧪 Testing female voice selection...');
+
+            try {
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('voice-select', '❌ Kana Assistant not found', 'error');
+                    setTestStatus('voice-select', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+
+                if (typeof kana.selectBestFemaleVoice === 'function') {
+                    const voices = speechSynthesis.getVoices();
+                    logMessage('voice-select', `Available voices: ${voices.length}`);
+
+                    // Call voice selection
+                    kana.selectBestFemaleVoice();
+
+                    if (kana.selectedVoice) {
+                        logMessage('voice-select', `✅ Selected voice: ${kana.selectedVoice.name} (${kana.selectedVoice.lang})`, 'success');
+
+                        // Test the selected voice
+                        const testUtterance = new SpeechSynthesisUtterance("Testing female voice selection");
+                        testUtterance.voice = kana.selectedVoice;
+                        speechSynthesis.speak(testUtterance);
+
+                        setTestStatus('voice-select', 'pass');
+                    } else {
+                        logMessage('voice-select', '❌ No voice was selected', 'error');
+                        setTestStatus('voice-select', 'fail');
+                    }
+                } else {
+                    logMessage('voice-select', '❌ selectBestFemaleVoice method not found', 'error');
+                    setTestStatus('voice-select', 'fail');
+                }
+
+            } catch (error) {
+                logMessage('voice-select', `❌ Error during voice selection test: ${error.message}`, 'error');
+                setTestStatus('voice-select', 'fail');
+            }
+        }
+
+        async function testConversationalResponse() {
+            logMessage('conv', '🧪 Testing conversational response generation...');
+
+            try {
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('conv', '❌ Kana Assistant not found', 'error');
+                    setTestStatus('conv', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+
+                if (typeof kana.generateConversationalResponse === 'function') {
+                    logMessage('conv', '🤖 Generating conversational response...');
+
+                    const testInput = "Hello Kana, can you help me with learning?";
+                    const response = await kana.generateConversationalResponse(testInput);
+
+                    if (response && response.length > 0) {
+                        logMessage('conv', `✅ Generated response: ${response.substring(0, 100)}...`, 'success');
+                        setTestStatus('conv', 'pass');
+                    } else {
+                        logMessage('conv', '❌ No conversational response generated', 'error');
+                        setTestStatus('conv', 'fail');
+                    }
+                } else {
+                    logMessage('conv', '❌ generateConversationalResponse method not found', 'error');
+                    setTestStatus('conv', 'fail');
+                }
+
+            } catch (error) {
+                logMessage('conv', `❌ Error during conversational response test: ${error.message}`, 'error');
+                setTestStatus('conv', 'fail');
+            }
+        }
+
+        async function testCompleteIntegration() {
+            logMessage('integration', '🧪 Running complete integration test...');
+
+            try {
+                if (typeof window.kanaAssistant === 'undefined') {
+                    logMessage('integration', '❌ Kana Assistant not found', 'error');
+                    setTestStatus('integration', 'fail');
+                    return;
+                }
+
+                const kana = window.kanaAssistant;
+
+                // Ensure voice is enabled and we're in text mode
+                if (!kana.voiceResponseEnabled) {
+                    await kana.toggleVoiceResponse();
+                }
+
+                if (kana.isInVoiceMode) {
+                    await kana.switchToTextUI();
+                }
+
+                logMessage('integration', '📝 Simulating user question...');
+
+                // Simulate asking a question
+                const testQuestion = "What is machine learning?";
+
+                // Find the chat input and simulate typing
+                const chatInput = document.querySelector('.kana-chat-input');
+                if (chatInput) {
+                    chatInput.value = testQuestion;
+                    logMessage('integration', '✅ Question entered in chat input', 'success');
+
+                    // Trigger the question
+                    const event = new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13 });
+                    chatInput.dispatchEvent(event);
+
+                    logMessage('integration', '🚀 Question submitted, waiting for response...', 'success');
+
+                    // Wait and check for voice response
+                    setTimeout(() => {
+                        if (kana.isSpeaking) {
+                            logMessage('integration', '✅ Voice response is active!', 'success');
+                            setTestStatus('integration', 'pass');
+                        } else {
+                            logMessage('integration', '⚠️ No voice response detected - check if Kana responded', 'error');
+                            setTestStatus('integration', 'fail');
+                        }
+                    }, 3000);
+                } else {
+                    logMessage('integration', '❌ Chat input not found - make sure Kana panel is visible', 'error');
+                    setTestStatus('integration', 'fail');
+                }
+
+            } catch (error) {
+                logMessage('integration', `❌ Error during integration test: ${error.message}`, 'error');
+                setTestStatus('integration', 'fail');
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🎤 Voice Feature Test Page Loaded');
+            updateTestSummary();
+        });
+
+        // Monitor for Kana Assistant loading
+        let checkInterval = setInterval(() => {
+            if (typeof window.kanaAssistant !== 'undefined') {
+                console.log('✅ Kana Assistant detected!');
+                document.body.style.border = '3px solid #4CAF50';
+                clearInterval(checkInterval);
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>

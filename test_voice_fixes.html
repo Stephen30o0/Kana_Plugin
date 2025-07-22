@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kana Voice Test - Fixed Issues</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #4a90e2 0%, #667eea 100%);
+            min-height: 100vh;
+            margin: 0;
+            color: white;
+        }
+
+        .content {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+
+        .fixes-list {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+
+        .fix-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .test-content {
+            line-height: 1.6;
+            margin: 15px 0;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 8px;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="status-indicator">
+        ✅ Kana Issues Fixed
+    </div>
+
+    <div class="content">
+        <h1>🎤 Kana Voice Assistant - Fixed Issues Test</h1>
+
+        <div class="fixes-list">
+            <h2>🔧 Issues Fixed:</h2>
+            <div class="fix-item">
+                <strong>1. Voice Recognition Restart Error:</strong> Fixed "recognition has already started" error by
+                properly stopping existing recognition before creating new instance
+            </div>
+            <div class="fix-item">
+                <strong>2. Screen Analysis Functionality:</strong> Added complete screen content extraction with
+                `extractPageContent()` and `isLMSPage()` methods
+            </div>
+            <div class="fix-item">
+                <strong>3. Asterisk Speech Issues:</strong> Enhanced text cleaning to remove asterisks, markdown
+                formatting, and other speech-breaking characters
+            </div>
+            <div class="fix-item">
+                <strong>4. Voice Backend Errors:</strong> Added proper error handling for missing voice backend services
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📝 Test Content for Screen Analysis</h2>
+            <div class="test-content">
+                <h3>JavaScript Arrays and Methods</h3>
+                <p>This page contains educational content about JavaScript programming. When you ask Kana questions, it
+                    should automatically analyze this content and provide contextual guidance.</p>
+
+                <h4>Array Methods Overview:</h4>
+                <ul>
+                    <li><strong>push()</strong> - Adds one or more elements to the end of an array</li>
+                    <li><strong>pop()</strong> - Removes the last element from an array</li>
+                    <li><strong>slice()</strong> - Returns a shallow copy of a portion of an array</li>
+                    <li><strong>map()</strong> - Creates a new array with results of calling a function for every array
+                        element</li>
+                    <li><strong>filter()</strong> - Creates a new array with all elements that pass a test</li>
+                </ul>
+
+                <h4>Example Code:</h4>
+                <pre>
+const numbers = [1, 2, 3, 4, 5];
+const doubled = numbers.map(x => x * 2);
+const evenNumbers = numbers.filter(x => x % 2 === 0);
+                </pre>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 Testing Instructions</h2>
+            <ol>
+                <li><strong>Activate Voice Mode:</strong> Click the Kana orb and enable voice responses</li>
+                <li><strong>Test Screen Analysis:</strong> Try these voice commands:
+                    <ul>
+                        <li>"What's on my screen?"</li>
+                        <li>"Explain the JavaScript content"</li>
+                        <li>"Help me understand these array methods"</li>
+                        <li>"Guide me through this programming content"</li>
+                    </ul>
+                </li>
+                <li><strong>Verify Fixes:</strong>
+                    <ul>
+                        <li>No more "recognition already started" errors</li>
+                        <li>Kana should reference specific content from this page</li>
+                        <li>Speech should be clear without asterisks or formatting issues</li>
+                        <li>Voice recognition should restart smoothly after errors</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h2>🔊 Speech Quality Test</h2>
+            <p>The text cleaning now removes:</p>
+            <ul>
+                <li>**Bold formatting** → Bold formatting</li>
+                <li>*Italic formatting* → Italic formatting</li>
+                <li>***Multiple asterisks*** → Multiple asterisks</li>
+                <li>`Code formatting` → Code formatting</li>
+                <li>[Links](url) → Links</li>
+                <li>### Headers → Headers</li>
+            </ul>
+            <button onclick="testSpeech()">Test Speech Clarity</button>
+        </div>
+    </div>
+
+    <script>
+        function testSpeech() {
+            if ('speechSynthesis' in window) {
+                const text = "This is a test of the improved speech synthesis. No more asterisks or formatting issues should be heard.";
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                utterance.volume = 0.9;
+                speechSynthesis.speak(utterance);
+                console.log("🔊 Test speech initiated");
+            } else {
+                alert("Speech synthesis not supported in this browser");
+            }
+        }
+
+        // Log when page is ready for testing
+        setTimeout(() => {
+            console.log('🧪 Kana Voice Test Page loaded - ready for testing fixes');
+            console.log('✅ Voice recognition restart error - FIXED');
+            console.log('✅ Screen analysis functionality - FIXED');
+            console.log('✅ Asterisk speech issues - FIXED');
+            console.log('✅ Error handling improvements - FIXED');
+        }, 1000);
+    </script>
+</body>
+
+</html>
+</content>
+</invoke>

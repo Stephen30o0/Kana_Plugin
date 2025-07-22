@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Voice Fix - Macro Trends</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333;
+            margin-top: 30px;
+        }
+
+        .question {
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            margin: 20px 0;
+        }
+
+        .status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #4caf50;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="status">✅ Voice Fix Test Ready</div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Macro Trends & Industry Shifts</h1>
+            <p>Testing comprehensive voice screen analysis</p>
+        </div>
+
+        <h2>How Emerging Technologies Reshape Industries</h2>
+
+        <p>As advanced founders, staying ahead of <strong>macro trends and industry shifts</strong> is essential for the
+            long-term success of your business. Global forces such as emerging technologies, policy changes, and
+            shifting capital flows can significantly reshape industries.</p>
+
+        <div class="question">
+            <strong>Test Question:</strong> How can AI-powered automation impact different industries?
+        </div>
+
+        <h3>Key Technologies</h3>
+        <ul>
+            <li><strong>Artificial Intelligence:</strong> Machine learning, natural language processing</li>
+            <li><strong>Blockchain:</strong> Decentralized systems, smart contracts</li>
+            <li><strong>Climate Tech:</strong> Renewable energy, carbon capture</li>
+        </ul>
+    </div>
+
+    <script src="content.js"></script>
+    <script>
+        // Initialize Kana when page loads
+        setTimeout(() => {
+            if (window.KanaAssistant) {
+                window.kanaAssistant = new KanaAssistant();
+                console.log('✅ Kana Assistant initialized for voice fix testing');
+                document.querySelector('.status').textContent = '✅ Voice Fix Test - Ready for Testing';
+
+                // Auto test voice functionality after a delay
+                setTimeout(() => {
+                    console.log('🎤 Testing voice functionality...');
+                    if (window.kanaAssistant && window.kanaAssistant.voiceResponseEnabled) {
+                        // Trigger voice mode to test the fix
+                        window.kanaAssistant.toggleVoiceResponse();
+                    }
+                }, 2000);
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>

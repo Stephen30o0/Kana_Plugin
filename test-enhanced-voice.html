@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Voice Features - Kana AI Assistant</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: block;
+        }
+
+        .feature-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #FFD700;
+        }
+
+        .feature-description {
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+
+        .implementation-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            margin: 12px 0;
+            overflow-x: auto;
+        }
+
+        .highlight {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .voice-demo {
+            background: linear-gradient(135deg, rgba(106, 92, 231, 0.2), rgba(162, 155, 254, 0.2));
+            border: 2px solid rgba(106, 92, 231, 0.4);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .voice-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4A90E2, #357ABD);
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(74, 144, 226, 0.4);
+            }
+
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 30px rgba(74, 144, 226, 0.6);
+            }
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 4px;
+        }
+
+        .completed {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .enhanced {
+            background: #FF9800;
+            color: white;
+        }
+
+        .new {
+            background: #9C27B0;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>🎤 Enhanced Voice Features</h1>
+            <p>Kana AI Assistant now features advanced voice capabilities with conversational AI, continuous listening,
+                and a beautiful voice UI that matches your theme!</p>
+            <div class="voice-demo">
+                <div class="voice-avatar">🤖</div>
+                <h3>Conversational Voice Mode</h3>
+                <p>Experience natural, flowing conversations with Kana using voice-to-voice interaction</p>
+            </div>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <span class="feature-icon">👩‍💻</span>
+                <div class="feature-title">Female Voice Selection</div>
+                <div class="feature-description">
+                    Automatically selects the best available female voice for natural, friendly interactions.
+                    Prioritizes high-quality voices like Google Female, Microsoft Zira, and Samantha.
+                    <span class="status-badge completed">COMPLETED</span>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">💬</span>
+                <div class="feature-title">Conversational Responses</div>
+                <div class="feature-description">
+                    Voice responses are now different from text - more conversational, friendly, and natural.
+                    Uses casual language, contractions, and speaking patterns for authentic conversations.
+                    <span class="status-badge new">NEW</span>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🎨</span>
+                <div class="feature-title">Theme-Matching Voice UI</div>
+                <div class="feature-description">
+                    Beautiful voice interface that automatically adapts to your selected glass theme colors.
+                    Glassmorphic design with animated voice visualizers and smooth transitions.
+                    <span class="status-badge new">NEW</span>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🔄</span>
+                <div class="feature-title">Continuous Conversation</div>
+                <div class="feature-description">
+                    Microphone stays active for natural back-and-forth conversations.
+                    No need to repeatedly activate - just talk naturally with Kana!
+                    <span class="status-badge new">NEW</span>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🎯</span>
+                <div class="feature-title">Smart Mode Switching</div>
+                <div class="feature-description">
+                    Automatically switches to dedicated voice UI when voice is enabled.
+                    Seamless transitions between text and voice modes with preserved functionality.
+                    <span class="status-badge enhanced">ENHANCED</span>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">📊</span>
+                <div class="feature-title">Voice Visualizers</div>
+                <div class="feature-description">
+                    Real-time visual feedback with animated rings, waves, and avatar states.
+                    Different animations for listening, speaking, and thinking states.
+                    <span class="status-badge new">NEW</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="implementation-section">
+            <h2>🛠️ Technical Implementation</h2>
+
+            <h3>Voice Selection Algorithm</h3>
+            <div class="code-block">
+                // Prioritized female voice selection
+                const femaleVoiceNames = [
+                'Google US English Female',
+                'Microsoft Zira Desktop',
+                'Microsoft Zira',
+                'Samantha', 'Karen', 'Moira'
+                ];
+            </div>
+
+            <h3>Conversational Response Generation</h3>
+            <div class="code-block">
+                // Separate prompt for voice responses
+                const conversationalPrompt = `You are Kana, a friendly AI learning assistant
+                having a voice conversation with a student. Respond in a conversational,
+                natural way as if you're speaking to them directly. Keep responses under
+                2-3 sentences for voice clarity.`;
+            </div>
+
+            <h3>Theme Integration</h3>
+            <div class="code-block">
+                // Voice UI automatically adapts to current theme
+                this.voiceUI.style.background = panelTheme.panelBg;
+                this.voiceUI.style.backdropFilter = `blur(${blur}px) brightness(${brightness})`;
+                avatar.style.background = orbTheme.orbBg;
+            </div>
+        </div>
+
+        <div class="implementation-section">
+            <h2>🚀 How to Use</h2>
+            <ol style="font-size: 16px; line-height: 1.8;">
+                <li><strong>Enable Voice:</strong> Click the voice toggle button in the chat header</li>
+                <li><strong>Voice UI Opens:</strong> Automatically switches to the beautiful voice interface</li>
+                <li><strong>Start Talking:</strong> The microphone is always listening - just speak naturally</li>
+                <li><strong>Continuous Chat:</strong> Have a back-and-forth conversation without re-activating</li>
+                <li><strong>Visual Feedback:</strong> Watch the animated avatar and rings respond to speech</li>
+                <li><strong>Theme Matching:</strong> UI colors automatically match your selected glass theme</li>
+            </ol>
+        </div>
+
+        <div class="implementation-section">
+            <h2>✨ Key Features</h2>
+            <div class="feature-grid">
+                <div
+                    style="background: rgba(76, 175, 80, 0.2); border: 1px solid rgba(76, 175, 80, 0.4); padding: 16px; border-radius: 12px;">
+                    <strong>🎙️ Always Listening</strong><br>
+                    Microphone stays active for natural conversations
+                </div>
+                <div
+                    style="background: rgba(33, 150, 243, 0.2); border: 1px solid rgba(33, 150, 243, 0.4); padding: 16px; border-radius: 12px;">
+                    <strong>👩 Female Voice</strong><br>
+                    Human-like female voice automatically selected
+                </div>
+                <div
+                    style="background: rgba(156, 39, 176, 0.2); border: 1px solid rgba(156, 39, 176, 0.4); padding: 16px; border-radius: 12px;">
+                    <strong>💬 Conversational</strong><br>
+                    Different responses for voice vs text interactions
+                </div>
+                <div
+                    style="background: rgba(255, 152, 0, 0.2); border: 1px solid rgba(255, 152, 0, 0.4); padding: 16px; border-radius: 12px;">
+                    <strong>🎨 Theme Aware</strong><br>
+                    Voice UI colors match your selected glass theme
+                </div>
+            </div>
+        </div>
+
+        <div
+            style="text-align: center; margin-top: 40px; padding: 30px; background: rgba(76, 175, 80, 0.1); border-radius: 16px; border: 1px solid rgba(76, 175, 80, 0.3);">
+            <h2>🎉 Ready to Experience Voice Mode!</h2>
+            <p style="font-size: 18px; margin-bottom: 20px;">
+                The enhanced voice features are fully implemented and ready for testing!
+            </p>
+            <p style="font-size: 14px; opacity: 0.9;">
+                Load the extension, navigate to any LMS platform, click the voice toggle, and start talking with Kana!
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Updated Kana UI - Screen Analysis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .content {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4a90e2;
+            padding-bottom: 10px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+
+        .form-section {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #4a90e2;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 8px;
+        }
+
+        button:hover {
+            background: #357abd;
+        }
+
+        .nav-section {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .nav-section a {
+            color: #4a90e2;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 2px solid #4a90e2;
+            border-radius: 5px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .data-table th,
+        .data-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: #4a90e2;
+            color: white;
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(74, 144, 226, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="status-indicator">
+        🎤 Test Voice UI & Screen Analysis
+    </div>
+
+    <div class="content">
+        <h1>Kana AI Assistant - Updated UI Test</h1>
+        <p>This page tests the updated Kana interface with rounded edges, no logos, and automatic screen analysis
+            capabilities.</p>
+
+        <div class="test-section">
+            <h2>📚 Learning Content Section</h2>
+            <p>This section contains educational material about JavaScript programming. When you ask Kana questions, it
+                should automatically analyze this content and provide contextual guidance.</p>
+
+            <h3>JavaScript Arrays</h3>
+            <p>Arrays in JavaScript are ordered collections of data. They can store multiple values in a single variable
+                and provide methods for manipulation.</p>
+
+            <h4>Common Array Methods:</h4>
+            <ul>
+                <li><strong>push()</strong> - Adds elements to the end</li>
+                <li><strong>pop()</strong> - Removes the last element</li>
+                <li><strong>slice()</strong> - Returns a portion of the array</li>
+                <li><strong>map()</strong> - Transforms each element</li>
+                <li><strong>filter()</strong> - Returns elements that meet a condition</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>📝 Interactive Form Section</h2>
+            <div class="form-section">
+                <label for="studentName">Student Name:</label>
+                <input type="text" id="studentName" placeholder="Enter your full name">
+
+                <label for="course">Select Course:</label>
+                <select id="course">
+                    <option value="">Choose a course...</option>
+                    <option value="javascript">JavaScript Fundamentals</option>
+                    <option value="python">Python Programming</option>
+                    <option value="react">React Development</option>
+                    <option value="nodejs">Node.js Backend</option>
+                </select>
+
+                <label for="question">Your Question:</label>
+                <textarea id="question" rows="4" placeholder="What would you like to learn about?"></textarea>
+
+                <button type="submit">Submit Question</button>
+                <button type="button">Save Draft</button>
+                <button type="button" disabled>Clear Form</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🧭 Navigation Section</h2>
+            <nav class="nav-section">
+                <a href="#lessons">View Lessons</a>
+                <a href="#assignments">Assignments</a>
+                <a href="#grades">Check Grades</a>
+                <a href="#resources">Study Resources</a>
+                <a href="#help">Get Help</a>
+            </nav>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Data Table Section</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Assignment</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Grade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>JavaScript Basics Quiz</td>
+                        <td>2024-01-15</td>
+                        <td>Completed</td>
+                        <td>95%</td>
+                    </tr>
+                    <tr>
+                        <td>Array Methods Exercise</td>
+                        <td>2024-01-20</td>
+                        <td>In Progress</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Final Project</td>
+                        <td>2024-02-01</td>
+                        <td>Not Started</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 Testing Instructions</h2>
+            <ol>
+                <li><strong>Activate Voice Mode:</strong> Click the Kana orb and enable voice responses</li>
+                <li><strong>Test Screen Analysis:</strong> Try asking questions like:
+                    <ul>
+                        <li>"What's on my screen?"</li>
+                        <li>"Help me with this form"</li>
+                        <li>"Explain the JavaScript content"</li>
+                        <li>"What assignments do I have?"</li>
+                        <li>"Guide me through this page"</li>
+                    </ul>
+                </li>
+                <li><strong>Check UI Updates:</strong> Notice the rounded edges, clean design without logos</li>
+                <li><strong>Test Responsiveness:</strong> Kana should automatically analyze screen content and provide
+                    contextual guidance</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Load the updated Kana extension content script -->
+    <script>
+        // Simulate some dynamic content changes for testing
+        setTimeout(() => {
+            console.log('🧪 Test page loaded - ready for Kana voice testing');
+        }, 1000);
+
+        // Add some interactivity for testing
+        document.querySelector('button[type="submit"]').addEventListener('click', (e) => {
+            e.preventDefault();
+            alert('Form submitted! This interaction should be detected by Kana.');
+        });
+    </script>
+</body>
+
+</html>
+</content>
+</invoke>
